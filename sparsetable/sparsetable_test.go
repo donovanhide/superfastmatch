@@ -3,8 +3,31 @@ package sparsetable
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
 	"testing"
 )
+
+func BenchmarkSparseTable(b *testing.B) {
+	const width uint64 = 1 << 24
+	const length int32 = 255
+	const groupSize uint64 = 48
+	A := Init(width, groupSize)
+	R := make([]byte, length)
+	for i := 0; i < b.N; i++ {
+		A.Set(uint64(rand.Int63n(int64(width))), R[:rand.Int31n(length)])
+	}
+}
+
+func BenchmarkMap(b *testing.B) {
+	const width uint64 = 1 << 27
+	const length int32 = 255
+	const groupSize uint64 = 48
+	A := make(map[uint64][]byte)
+	R := make([]byte, length)
+	for i := 0; i < b.N; i++ {
+		A[uint64(rand.Int63n(int64(width)))] = R[:rand.Int31n(length)]
+	}
+}
 
 func Test_SparseTable(t *testing.T) {
 	A := Init(1024, 48)
@@ -78,13 +101,10 @@ func ExampleInOrderSparseTable() {
 	fmt.Print(A.String())
 	// Output:
 	// SparseTable Count:5 Size: 6
-	// Group Index: 0 Size: 29
-	// Group Index: 1 Size: 5
-	// Group Index: 2 Size: 10
+	// Groups: [29,5,10]
 	// 0: "First is a long string!"
 	// 1: "Second"
 	// 2: "Third"
-	// 3: ""
 	// 4: "Fifth"
 	// 5: "Sixth"
 }
@@ -98,7 +118,7 @@ func ExampleRandomOrderSparseTable() {
 	fmt.Print(A.String())
 	// Output:
 	// SparseTable Count:4 Size: 4
-	// Group Index: 0 Size: 40
+	// Groups: [40]
 	// 0: "First is a long string!"
 	// 1: "Second"
 	// 2: "Third"
