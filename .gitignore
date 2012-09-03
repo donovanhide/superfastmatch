@@ -1,4 +1,6 @@
-
 .DS_Store
 *.out
 *.test
+bin/*
+pkg/*
+
