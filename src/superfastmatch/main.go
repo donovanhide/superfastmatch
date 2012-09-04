@@ -1,41 +1,40 @@
 package main
 
 import (
-	// "fmt"
-	// "math/rand"
+	"api"
+	"flag"
 	"log"
-	"net"
-	"net/http"
-	_ "net/http/pprof"
-	"net/rpc"
+	"os"
+	"os/exec"
 	"posting"
-	"sparsetable"
+	"time"
 )
 
-var table *sparsetable.SparseTable
+type Command struct {
+	Run       func(cmd *Command, args []string)
+	UsageLine string
+	Short     string
+	Long      string
+	Flag      flag.FlagSet
+}
 
-const width uint64 = 1 << 24
-const groupSize uint64 = 48
-
-// func handler(w http.ResponseWriter, r *http.Request) {
-// 	const length int32 = 255
-// 	R := make([]byte, length)
-// 	for i := 0; i < 1000; i++ {
-// 		table.Set(uint64(rand.Int63n(int64(width))), R[:rand.Int31n(length)])
-// 	}
-// 	fmt.Fprintf(w, table.String())
-// }
+func launchPosting() {
+	cmd := exec.Command(os.Args[0], "posting")
+	err := cmd.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
+	time.Sleep(500 * time.Millisecond)
+}
 
 func main() {
-	table = sparsetable.Init(width, groupSize)
-	posting := new(posting.Posting)
-	rpc.Register(posting)
-	rpc.HandleHTTP()
-	l, e := net.Listen("tcp", ":8090")
-	if e != nil {
-		log.Fatal("listen error:", e)
+	switch {
+	case len(os.Args) > 1 && os.Args[1] == "api":
+		api.Serve()
+	case len(os.Args) > 1 && os.Args[1] == "posting":
+		posting.Serve(1<<24, 48, 0)
+	default:
+		launchPosting()
+		api.Serve()
 	}
-	http.Serve(l, nil)
-	// http.HandleFunc("/", handler)
-	// http.ListenAndServe(":8090", nil)
 }

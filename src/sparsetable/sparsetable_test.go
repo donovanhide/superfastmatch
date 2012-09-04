@@ -7,10 +7,11 @@ import (
 	"testing"
 )
 
+const width uint64 = 1 << 24
+const length int32 = 255
+const groupSize uint64 = 48
+
 func BenchmarkSparseTable(b *testing.B) {
-	const width uint64 = 1 << 24
-	const length int32 = 255
-	const groupSize uint64 = 48
 	A := Init(width, groupSize)
 	R := make([]byte, length)
 	for i := 0; i < b.N; i++ {
@@ -19,9 +20,6 @@ func BenchmarkSparseTable(b *testing.B) {
 }
 
 func BenchmarkMap(b *testing.B) {
-	const width uint64 = 1 << 27
-	const length int32 = 255
-	const groupSize uint64 = 48
 	A := make(map[uint64][]byte)
 	R := make([]byte, length)
 	for i := 0; i < b.N; i++ {

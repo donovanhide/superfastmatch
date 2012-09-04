@@ -96,3 +96,11 @@ func (s *SparseTable) String() string {
 	}
 	return buffer.String()
 }
+
+func (s *SparseTable) Stats() interface{} {
+	return map[string]uint64{
+		"size":      s.Size(),
+		"count":     s.Count(),
+		"groupSize": s.groupSize,
+	}
+}

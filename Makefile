@@ -1,6 +1,15 @@
+algo:
+	go test -c document
+	mv document.test src/document
+	cd src/document && ./document.test -test.bench="Benchmark.*" -test.cpuprofile="cpu.out"
+	cd src/document && go tool pprof --text --lines ./document.test ./cpu.out
+	cd src/document && rm *.out
+	cd src/document && rm *.test
+
 benchmark:
 	go test -c ./src/sparsetable
-	./sparsetable.test -test.v -test.bench="Sparse.*" -test.benchtime=5 -test.cpuprofile="cpu.out" -test.memprofile="mem.out"
+	./sparsetable.test -test.bench="Benchmark.*" -test.cpuprofile="cpu.out"
+	./sparsetable.test -test.bench="Benchmark.*" -test.memprofilerate=1 -test.memprofile="mem.out"
 	go tool pprof --text --lines ./sparsetable.test ./cpu.out
 	go tool pprof --text --lines ./sparsetable.test ./mem.out
 	rm *.out
@@ -9,6 +18,7 @@ benchmark:
 test:
 	go test sparsetable
 	go test posting
+	go test document
 
 run:
 	go build -v -o ./bin/superfastmatch superfastmatch
