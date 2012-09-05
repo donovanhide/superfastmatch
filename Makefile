@@ -1,5 +1,10 @@
-algo:
-	go test -c document
+run:
+	go install -v superfastmatch
+	go build -v -o ./bin/superfastmatch superfastmatch
+	./bin/superfastmatch
+
+algo: 
+	go test -x -c document
 	mv document.test src/document
 	cd src/document && ./document.test -test.bench="Benchmark.*" -test.cpuprofile="cpu.out"
 	cd src/document && go tool pprof --text --lines ./document.test ./cpu.out
@@ -15,11 +20,7 @@ benchmark:
 	rm *.out
 	rm *.test
 
-test:
+test: 
 	go test sparsetable
 	go test posting
 	go test document
-
-run:
-	go build -v -o ./bin/superfastmatch superfastmatch
-	./bin/superfastmatch

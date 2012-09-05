@@ -2,7 +2,17 @@ package document
 
 import (
 	"testing"
+	"unicode/utf8"
 )
+
+func buildDocument(doctype uint32, docid uint32, title string, text string) *Document {
+	return &Document{
+		Id:     DocumentID{Doctype: doctype, Docid: docid},
+		Title:  title,
+		Text:   text,
+		Length: utf8.RuneCountInString(text),
+	}
+}
 
 func Test_NormalisedText(t *testing.T) {
 	doc1 := buildDocument(1, 1, "This is a test", "This is some text,!&")

@@ -3,4 +3,7 @@
 *.test
 bin/*
 pkg/*
+mongo/*
+data/*
 src/code.google.com/*
+mongo.tgz

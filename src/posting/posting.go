@@ -21,7 +21,7 @@ func Init(size uint64, groupSize uint64, offset uint64) *Posting {
 		offset: offset,
 	}
 	expvar.Publish("table", expvar.Func(func() interface{} { return table.Stats() }))
-	expvar.Publish("posting", expvar.Func(func() interface{} { return posting.Stats() }))
+	expvar.Publish("posting", expvar.Func(func() interface{} { return posting.stats() }))
 	return &posting
 }
 
@@ -53,7 +53,7 @@ func (p *Posting) Stress(count int, reply *bool) error {
 	return nil
 }
 
-func (p *Posting) Stats() interface{} {
+func (p *Posting) stats() interface{} {
 	return map[string]uint64{
 		"offset":    p.offset,
 		"documents": p.documents,
