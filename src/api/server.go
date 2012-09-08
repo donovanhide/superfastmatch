@@ -3,65 +3,30 @@ package api
 import (
 	"code.google.com/p/gorilla/mux"
 	"document"
-	"encoding/json"
-	"fmt"
 	"labix.org/v2/mgo"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
 	"net/rpc"
-	"reflect"
+	"query"
 )
-
-type appError struct {
-	Error   error
-	Message string
-	Code    int
-}
-
-type appHandler func(http.ResponseWriter, *http.Request) *appError
 
 var c *rpc.Client
 var s *mgo.Session
 
-func (fn appHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if e := fn(w, r); e != nil {
-		log.Printf("%v: %v: %v", e.Code, e.Error, e.Message)
-		http.Error(w, fmt.Sprintf("Main Error: %v\nDetails: %v", e.Error, e.Message), e.Code)
-	}
-}
-
-func doRPC(method string, args interface{}, reply interface{}, rw http.ResponseWriter) *appError {
-	call := c.Go(method, args, reply, nil)
-	replyCall := <-call.Done
-	if replyCall.Error != nil {
-		return &appError{replyCall.Error, "RPC Problem", 500}
-	}
-	return nil
-}
-
-func writeJson(rw http.ResponseWriter, object interface{}) *appError {
-	value := reflect.Indirect(reflect.ValueOf(object))
-	if value.Kind() == reflect.Slice {
-		object = map[string]interface{}{"rows": object, "totalRows": value.Len()}
-	}
-	b, err := json.Marshal(object)
-	if err != nil {
-		return &appError{err, "Object not serializable to JSON", 500}
-	}
-	rw.Header().Set("Content-Type", "application/json")
-	rw.Write(b)
-	return nil
+func getCollection(name string) *mgo.Collection {
+	return s.Clone().DB("superfastmatch").C(name)
 }
 
 func documentsHandler(rw http.ResponseWriter, req *http.Request) *appError {
+	fillValues(req)
 	switch req.Method {
 	case "GET":
-		documents, err := document.GetDocuments(req, s.Clone())
+		documents, err := query.GetDocuments(&req.Form, getCollection("documents"))
 		if err != nil {
 			return &appError{err, "Document not found", 404}
 		}
-		return writeJson(rw, documents)
+		return writeJson(rw, req, documents)
 	}
 	return nil
 }
@@ -69,17 +34,17 @@ func documentsHandler(rw http.ResponseWriter, req *http.Request) *appError {
 func documentHandler(rw http.ResponseWriter, req *http.Request) *appError {
 	switch req.Method {
 	case "GET":
-		document, err := document.GetDocument(req, s.Clone())
+		document, err := document.GetDocument(req, getCollection("documents"))
 		if err != nil {
 			return &appError{err, "Document not found", 404}
 		}
-		return writeJson(rw, document)
+		return writeJson(rw, req, document)
 	case "POST":
 		document, err := document.NewDocument(req)
 		if err != nil {
 			return &appError{err, "Badly formed Document", 500}
 		}
-		document.Save(s.Clone())
+		document.Save(getCollection("documents"))
 		var success bool
 		return doRPC("Posting.Add", *document, &success, rw)
 	case "DELETE":

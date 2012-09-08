@@ -24,3 +24,9 @@ test:
 	go test sparsetable
 	go test posting
 	go test document
+	go test query
+
+dependencies:
+	go get -u launchpad.net/gocheck
+	go get -u code.google.com/p/gorilla/mux
+	go get -u labix.org/v2/mgo

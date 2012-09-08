@@ -4,8 +4,6 @@ import (
 	"code.google.com/p/gorilla/mux"
 	"errors"
 	"labix.org/v2/mgo"
-	"labix.org/v2/mgo/bson"
-	// "log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -76,37 +74,21 @@ func NewDocument(req *http.Request) (*Document, error) {
 	}, nil
 }
 
-func GetDocument(req *http.Request, session *mgo.Session) (*Document, error) {
+func GetDocument(req *http.Request, coll *mgo.Collection) (*Document, error) {
 	id, err := NewDocumentId(req)
 	if err != nil {
 		return nil, err
 	}
-	d := session.DB("superfastmatch").C("documents")
 	document := Document{Id: *id}
-	err = d.FindId(document.Id).One(&document)
+	err = coll.FindId(document.Id).One(&document)
 	if err != nil {
 		return nil, err
 	}
 	return &document, nil
 }
 
-func GetDocuments(req *http.Request, session *mgo.Session) (*[]Document, error) {
-	d := session.DB("superfastmatch").C("documents")
-	var documents []Document
-	var query interface{}
-	doctype, err := parseId(req, "doctype")
-	if err == nil {
-		query = bson.M{"_id.doctype": doctype}
-	}
-	if err := d.Find(query).Select(bson.M{"text": 0}).All(&documents); err != nil {
-		return nil, err
-	}
-	return &documents, nil
-}
-
-func (document *Document) Save(session *mgo.Session) error {
-	d := session.DB("superfastmatch").C("documents")
-	_, err := d.UpsertId(document.Id, document)
+func (document *Document) Save(coll *mgo.Collection) error {
+	_, err := coll.UpsertId(document.Id, document)
 	return err
 }
 
