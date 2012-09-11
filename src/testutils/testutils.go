@@ -13,12 +13,15 @@ import (
 type DBSuite struct {
 	cmd     *exec.Cmd
 	session *mgo.Session
-	Db      *mgo.Database
+}
+
+func (s *DBSuite) Db() *mgo.Database {
+	return s.session.Clone().DB("test")
 }
 
 func (s *DBSuite) SetUpSuite(c *C) {
 	dbPath := c.MkDir()
-	s.cmd = exec.Command(os.Getenv("GOPATH")+"/mongo/bin/mongod", "--dbpath", dbPath, "--port", "12345")
+	s.cmd = exec.Command(os.Getenv("GOPATH")+"/mongo/bin/mongod", "--dbpath", dbPath, "--port", "12345", "--rest")
 	stdout, err := s.cmd.StdoutPipe()
 	c.Assert(err, IsNil)
 	outBuf := bufio.NewReader(stdout)
@@ -36,7 +39,6 @@ func (s *DBSuite) SetUpSuite(c *C) {
 	c.Assert(err, IsNil)
 	c.Log("Started mongo session")
 	s.session = sess
-	s.Db = sess.DB("test")
 }
 
 func (s *DBSuite) TearDownSuite(c *C) {
@@ -45,6 +47,6 @@ func (s *DBSuite) TearDownSuite(c *C) {
 	s.cmd.Wait()
 }
 
-func (s *DBSuite) SetupTest(c *C) {
-	s.Db.DropDatabase()
+func (s *DBSuite) SetUpTest(c *C) {
+	s.Db().DropDatabase()
 }

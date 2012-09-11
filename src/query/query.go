@@ -7,6 +7,8 @@ import (
 	"labix.org/v2/mgo/bson"
 	"net/url"
 	"reflect"
+	"strconv"
+	"strings"
 )
 
 type QueryParams struct {
@@ -20,8 +22,7 @@ type QueryParams struct {
 
 type DocumentQueryParams struct {
 	QueryParams
-	Doctype uint32 `schema:"doctype"`
-	Docid   uint32 `schema:"docid"`
+	Doctypes string `schema:"doctypes"`
 }
 
 type DocumentResult struct {
@@ -47,16 +48,32 @@ func fillResult(r interface{}, query *mgo.Query) error {
 	return nil
 }
 
-func GetDocuments(values *url.Values, coll *mgo.Collection) (*DocumentResult, error) {
+func parseDocTypeRange(r string) bson.M {
+	sections := strings.Split(r, ":")
+	filter := make([]bson.M, len(sections))
+	for i, f := range sections {
+		g := strings.Split(f, "-")
+		start, _ := strconv.ParseUint(g[0], 10, 32)
+		if len(g) == 2 {
+			end, _ := strconv.ParseUint(g[1], 10, 32)
+			filter[i] = bson.M{"_id.doctype": bson.M{"$gte": start, "$lte": end}}
+		} else {
+			filter[i] = bson.M{"_id.doctype": start}
+		}
+	}
+	return bson.M{"$or": filter}
+}
+
+func GetDocuments(values *url.Values, db *mgo.Database) (*DocumentResult, error) {
 	q := new(DocumentQueryParams)
 	r := new(DocumentResult)
 	decoder.Decode(q, *values)
-	if q.Doctype != 0 {
-		q.Filter = bson.M{"_id.doctype": q.Doctype}
+	if len(q.Doctypes) > 0 {
+		q.Filter = parseDocTypeRange(q.Doctypes)
 	}
 	q.Select = bson.M{"text": 0}
 	q.DefaultSort = []string{"doctype", "docid"}
-	docs := q.getQuery(values, coll)
+	docs := q.getQuery(values, db.C("documents"))
 	if err := docs.All(&r.Rows); err != nil {
 		return nil, err
 	}

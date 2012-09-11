@@ -33,3 +33,17 @@ func Test_Hashes(t *testing.T) {
 		t.Errorf("Incorrect hashes created: %v %v %v", firstHash, lastHash, doc.Hashes(4))
 	}
 }
+
+func Test_TestDocument(t *testing.T) {
+	id := &DocumentID{
+		Doctype: 1,
+		Docid:   1,
+	}
+	doc, err := NewTestDocument(id, 100)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+	if doc.Length == 0 {
+		t.Errorf("Bad Test Document")
+	}
+}

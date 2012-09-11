@@ -44,7 +44,7 @@ func doRPC(method string, args interface{}, reply interface{}, rw http.ResponseW
 	return nil
 }
 
-func writeJson(rw http.ResponseWriter, req *http.Request, object interface{}) *appError {
+func writeJson(rw http.ResponseWriter, req *http.Request, object interface{}, code int) *appError {
 	var enc *json.Encoder
 	if strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
 		gz, err := gzip.NewWriterLevel(rw, gzip.BestSpeed)
@@ -59,6 +59,7 @@ func writeJson(rw http.ResponseWriter, req *http.Request, object interface{}) *a
 		enc = json.NewEncoder(rw)
 	}
 	rw.Header().Set("Content-Type", "application/json; charset=utf-8")
+	rw.WriteHeader(code)
 	if err := enc.Encode(object); err != nil {
 		return &appError{err, "Object not serializable to JSON", 500}
 	}

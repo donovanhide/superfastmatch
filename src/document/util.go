@@ -1,8 +1,13 @@
 package document
 
 import (
+	"bytes"
+	"io/ioutil"
+	"labix.org/v2/mgo"
+	"math/rand"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 type HasherFunc func(text string, windowSize int, count int) []uint32
@@ -83,4 +88,50 @@ func normaliseRune(r rune) rune {
 		return unicode.ToUpper(r)
 	}
 	return whiteSpace
+}
+
+func BuildTestCorpus(db *mgo.Database, maxDoctype uint32, maxDocid uint32, maxLength int) error {
+	for i := uint32(1); i <= maxDoctype; i++ {
+		for j := uint32(1); j <= maxDocid; j++ {
+			id := &DocumentID{
+				Doctype: i,
+				Docid:   j,
+			}
+			doc, err := NewTestDocument(id, maxLength)
+			if err != nil {
+				return err
+			}
+			err = doc.Save(db)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func NewTestDocument(id *DocumentID, maxLength int) (*Document, error) {
+	if len(words) == 0 {
+		content, err := ioutil.ReadFile("/usr/share/dict/words")
+		if err != nil {
+			return nil, err
+		}
+		words = strings.Split(string(content), "\n")
+	}
+	title := new(bytes.Buffer)
+	text := new(bytes.Buffer)
+	titleLength := rand.Intn(5) + 5
+	textLength := rand.Intn(maxLength-100) + 100
+	for i := 0; i < titleLength; i++ {
+		title.WriteString(words[rand.Intn(len(words))] + " ")
+	}
+	for i := 0; i < textLength; i++ {
+		text.WriteString(words[rand.Intn(len(words))] + " ")
+	}
+	return &Document{
+		Id:     *id,
+		Title:  title.String(),
+		Text:   text.String(),
+		Length: utf8.RuneCountInString(text.String()),
+	}, nil
 }

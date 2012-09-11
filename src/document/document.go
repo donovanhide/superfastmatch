@@ -3,8 +3,10 @@ package document
 import (
 	"code.google.com/p/gorilla/mux"
 	"errors"
+	"fmt"
 	"labix.org/v2/mgo"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -30,6 +32,8 @@ type Result struct {
 	results map[DocumentID][]uint32
 }
 
+var words []string
+
 func parseId(req *http.Request, key string) (uint32, error) {
 	value, err := strconv.ParseUint(mux.Vars(req)[key], 10, 32)
 	if err != nil || value == 0 {
@@ -53,43 +57,41 @@ func NewDocumentId(req *http.Request) (*DocumentID, error) {
 	}, nil
 }
 
-func NewDocument(req *http.Request) (*Document, error) {
-	id, err := NewDocumentId(req)
-	if err != nil {
-		return nil, err
-	}
-	title := req.FormValue("title")
-	text := req.FormValue("text")
-	if len(title) == 0 || len(text) == 0 {
+func (d *DocumentID) String() string {
+	return fmt.Sprintf("(%v,%v)", d.Doctype, d.Docid)
+}
+
+func NewDocument(id *DocumentID, values *url.Values) (*Document, error) {
+	if len(values.Get("title")) == 0 || len(values.Get("text")) == 0 {
 		return nil, errors.New("Missing title or text fields")
 	}
-	if !utf8.ValidString(title) || !utf8.ValidString(text) {
+	if !utf8.ValidString(values.Get("title")) || !utf8.ValidString(values.Get("text")) {
 		return nil, errors.New("Invalid UTF8 submitted")
 	}
 	return &Document{
 		Id:     *id,
-		Title:  title,
-		Text:   text,
-		Length: utf8.RuneCountInString(text),
+		Title:  values.Get("title"),
+		Text:   values.Get("text"),
+		Length: utf8.RuneCountInString(values.Get("text")),
 	}, nil
 }
 
-func GetDocument(req *http.Request, coll *mgo.Collection) (*Document, error) {
-	id, err := NewDocumentId(req)
-	if err != nil {
-		return nil, err
-	}
+func GetDocument(id *DocumentID, db *mgo.Database) (*Document, error) {
 	document := Document{Id: *id}
-	err = coll.FindId(document.Id).One(&document)
+	err := db.C("documents").FindId(document.Id).One(&document)
 	if err != nil {
 		return nil, err
 	}
 	return &document, nil
 }
 
-func (document *Document) Save(coll *mgo.Collection) error {
-	_, err := coll.UpsertId(document.Id, document)
+func (document *Document) Save(db *mgo.Database) error {
+	_, err := db.C("documents").UpsertId(document.Id, document)
 	return err
+}
+
+func (document *Document) Delete(db *mgo.Database) error {
+	return db.C("documents").RemoveId(document.Id)
 }
 
 func (document *Document) NormalisedText() string {
