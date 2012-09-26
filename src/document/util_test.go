@@ -34,14 +34,15 @@ func openFile(path string) string {
 func benchmarkHasher(b *testing.B, hasher HasherFunc, paths []string) {
 	b.ResetTimer()
 	b.StopTimer()
+	key := HashKey{WindowSize: 15, HashWidth: 32}
 	byteCount := int64(0)
 	for _, path := range paths {
 		text := openFile(path)
-		count := utf8.RuneCountInString(text)
+		count := uint64(utf8.RuneCountInString(text))
 		b.Logf("Benchmarking file %v (%v...)", path, text[:20])
 		b.StartTimer()
 		for i := 0; i < b.N; i++ {
-			hasher(text, 15, count)
+			hasher(text, count, key)
 		}
 		b.StopTimer()
 		byteCount += int64(len(text) * b.N)
@@ -53,14 +54,11 @@ func Benchmark_RabinKarp(b *testing.B) {
 	benchmarkHasher(b, rollingRabinKarp, testFiles)
 }
 
-func Benchmark_RabinKarp2(b *testing.B) {
-	benchmarkHasher(b, rollingRabinKarp2, testFiles)
-}
-
 func testHasher(t *testing.T, hasher HasherFunc) {
 	text := "Text gobble Text"
-	count := utf8.RuneCountInString(text) - 3
-	hashes := hasher(text, 4, count)
+	count := uint64(utf8.RuneCountInString(text) - 3)
+	key := HashKey{WindowSize: 4, HashWidth: 10}
+	hashes := hasher(text, count, key)
 	if len(hashes) != 13 {
 		t.Errorf("Wrong number of hashes: %v", hashes)
 	}
@@ -73,5 +71,4 @@ func testHasher(t *testing.T, hasher HasherFunc) {
 
 func Test_Hashers(t *testing.T) {
 	testHasher(t, rollingRabinKarp)
-	testHasher(t, rollingRabinKarp2)
 }

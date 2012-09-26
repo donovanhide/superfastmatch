@@ -2,51 +2,61 @@ package testutils
 
 import (
 	"bufio"
-	"labix.org/v2/mgo"
 	. "launchpad.net/gocheck"
 	"os"
 	"os/exec"
+	"registry"
 	"strings"
 	"syscall"
 )
 
 type DBSuite struct {
-	cmd     *exec.Cmd
-	session *mgo.Session
+	Registry *registry.Registry
+	mongoCmd *exec.Cmd
+	c        *C
 }
 
-func (s *DBSuite) Db() *mgo.Database {
-	return s.session.Clone().DB("test")
+func (s *DBSuite) killMongo() {
+	s.mongoCmd.Process.Signal(syscall.SIGINT)
+	s.mongoCmd.Wait()
 }
 
-func (s *DBSuite) SetUpSuite(c *C) {
-	dbPath := c.MkDir()
-	s.cmd = exec.Command(os.Getenv("GOPATH")+"/mongo/bin/mongod", "--dbpath", dbPath, "--port", "12345", "--rest")
-	stdout, err := s.cmd.StdoutPipe()
-	c.Assert(err, IsNil)
+func (s *DBSuite) startMongo() {
+	dbPath := s.c.MkDir()
+	s.mongoCmd = exec.Command(os.Getenv("GOPATH")+"/mongo/bin/mongod", "--dbpath", dbPath, "--port", "12345", "--rest")
+	stdout, err := s.mongoCmd.StdoutPipe()
+	s.c.Assert(err, IsNil)
 	outBuf := bufio.NewReader(stdout)
-	c.Assert(s.cmd.Start(), IsNil)
+	s.c.Assert(s.mongoCmd.Start(), IsNil)
 	for {
 		outLine, outErr := outBuf.ReadString('\n')
-		c.Assert(outErr, IsNil)
-		c.Log(outLine)
+		s.c.Assert(outErr, IsNil)
+		s.c.Log(outLine)
 		if strings.Contains(outLine, "waiting for connections") {
 			break
 		}
 	}
-	c.Log("Started mongo test instance")
-	sess, err := mgo.Dial("localhost:12345")
-	c.Assert(err, IsNil)
-	c.Log("Started mongo session")
-	s.session = sess
+	s.c.Log("Started mongo test instance")
+}
+
+func (s *DBSuite) SetUpSuite(c *C) {
+	s.c = c
+	s.Registry = registry.NewRegistry([]string{"-db=test", "-mongo_url=localhost:12345", "-api_address=localhost:9080", "-posting_addresses=localhost:9090,localhost:9091"})
+	s.startMongo()
 }
 
 func (s *DBSuite) TearDownSuite(c *C) {
-	s.session.Close()
-	s.cmd.Process.Signal(syscall.SIGINT)
-	s.cmd.Wait()
+	s.killMongo()
 }
 
 func (s *DBSuite) SetUpTest(c *C) {
-	s.Db().DropDatabase()
+	s.c.Log("Opening Registry")
+	s.Registry.Open()
+	s.c.Log("Dropping Test Database")
+	s.Registry.DropDatabase()
+}
+
+func (s *DBSuite) TearDownTest(c *C) {
+	s.c.Log("Closing Registry")
+	s.Registry.Close()
 }

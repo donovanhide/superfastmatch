@@ -3,17 +3,34 @@ package posting
 import (
 	"log"
 	"net"
-	"net/http"
+	"strings"
+	// "net/http"
 	"net/rpc"
+	"registry"
 )
 
-func Serve(width uint64, groupSize uint64, offset uint64) {
-	p := Init(width, groupSize, offset)
-	rpc.Register(p)
-	rpc.HandleHTTP()
-	l, e := net.Listen("tcp", ":8090")
-	if e != nil {
-		log.Fatal("listen error:", e)
+func serve(registry *registry.Registry, l *net.Listener) {
+	log.Println("Starting Posting Server on:", (*l).Addr().String())
+	p := newPosting(registry, (*l).Addr().String())
+	server := rpc.NewServer()
+	server.Register(p)
+	registry.Routines.Add(1)
+	for {
+		conn, err := (*l).Accept()
+		if err != nil && strings.HasSuffix(err.Error(), "use of closed network connection") {
+			break
+		}
+		if err != nil {
+			log.Fatalf(err.Error())
+		}
+		go server.ServeConn(conn)
 	}
-	http.Serve(l, nil)
+	log.Println("Stopping Posting Server:", (*l).Addr().String())
+	registry.Routines.Done()
+}
+
+func Serve(registry *registry.Registry) {
+	for i, _ := range registry.PostingListeners {
+		go serve(registry, &registry.PostingListeners[i])
+	}
 }

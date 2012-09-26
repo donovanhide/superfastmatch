@@ -10,7 +10,7 @@ func buildDocument(doctype uint32, docid uint32, title string, text string) *Doc
 		Id:     DocumentID{Doctype: doctype, Docid: docid},
 		Title:  title,
 		Text:   text,
-		Length: utf8.RuneCountInString(text),
+		Length: uint64(utf8.RuneCountInString(text)),
 	}
 }
 
@@ -24,13 +24,14 @@ func Test_NormalisedText(t *testing.T) {
 
 func Test_Hashes(t *testing.T) {
 	doc := buildDocument(1, 1, "This is a test", "Text gobble TEXT")
-	if len(doc.Hashes(4)) != 13 {
-		t.Errorf("Wrong number of hashes: %v", len(doc.Hashes(4)))
+	key := HashKey{WindowSize: 4, HashWidth: 32}
+	if len(doc.Hashes(key)) != 13 {
+		t.Errorf("Wrong number of hashes: %v", len(doc.Hashes(key)))
 	}
-	firstHash := doc.Hashes(4)[0]
-	lastHash := doc.Hashes(4)[12]
+	firstHash := doc.Hashes(key)[0]
+	lastHash := doc.Hashes(key)[12]
 	if firstHash != lastHash {
-		t.Errorf("Incorrect hashes created: %v %v %v", firstHash, lastHash, doc.Hashes(4))
+		t.Errorf("Incorrect hashes created: %v %v %v", firstHash, lastHash, doc.Hashes(key))
 	}
 }
 

@@ -25,6 +25,8 @@ test:
 	go test posting
 	go test document
 	go test query
+	go test queue
+	go test registry
 
 dependencies:
 	go get -u launchpad.net/gocheck

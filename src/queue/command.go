@@ -3,19 +3,20 @@ package queue
 import (
 	"document"
 	"errors"
-	"labix.org/v2/mgo"
 	"log"
+	"posting"
+	"registry"
 )
 
-func (item *QueueItem) Execute(db *mgo.Database) error {
+func (item *QueueItem) Execute(registry *registry.Registry, client *posting.Client) error {
 	var err error
 	switch item.Command {
 	case "Add Document":
-		err = AddDocument(item, db)
+		err = AddDocument(item, registry, client)
 	case "Delete Document":
-		err = DeleteDocument(item, db)
+		err = DeleteDocument(item, registry, client)
 	case "Test Corpus":
-		err = TestCorpus(item, db)
+		err = TestCorpus(item, registry, client)
 	default:
 		err = errors.New("Command does not exist!")
 	}
@@ -28,10 +29,10 @@ func (item *QueueItem) Execute(db *mgo.Database) error {
 		item.Payload = []byte(nil)
 		log.Printf("Completed Queue Item: %v", item)
 	}
-	return item.Save(db)
+	return item.Save(registry)
 }
 
-func AddDocument(item *QueueItem, Db *mgo.Database) error {
+func AddDocument(item *QueueItem, registry *registry.Registry, client *posting.Client) error {
 	values, err := item.PayloadValues()
 	if err != nil {
 		return err
@@ -40,23 +41,40 @@ func AddDocument(item *QueueItem, Db *mgo.Database) error {
 	if err != nil {
 		return err
 	}
-	return doc.Save(Db)
-	// var success bool
-	// err = doRPC("Posting.Delete", *document, &success, rw)
-
-}
-
-func DeleteDocument(item *QueueItem, db *mgo.Database) error {
-	doc, err := document.GetDocument(item.Target, db)
+	err = doc.Save(registry)
 	if err != nil {
 		return err
 	}
-	return doc.Delete(db)
+	// success := make([]bool, len(registry.PostingClients))
+	err = client.CallMultiple("Posting.Add", &doc.Id)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func DeleteDocument(item *QueueItem, registry *registry.Registry, client *posting.Client) error {
+	doc, err := document.GetDocument(item.Target, registry)
+	if err != nil {
+		return err
+	}
+	return doc.Delete(registry)
 	// var success bool
 	// err = doRPC("Posting.Delete", *document, &success, rw)
 
 }
 
-func TestCorpus(item *QueueItem, db *mgo.Database) error {
-	return document.BuildTestCorpus(db, 100, 100, 5000)
+func TestCorpus(item *QueueItem, registry *registry.Registry, client *posting.Client) error {
+	docs := document.BuildTestCorpus(10, 20, 500)
+	for doc := <-docs; doc != nil; doc = <-docs {
+		err := doc.Save(registry)
+		if err != nil {
+			return err
+		}
+		err = client.CallMultiple("Posting.Add", &doc.Id)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

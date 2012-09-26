@@ -3,25 +3,17 @@ package api
 import (
 	"code.google.com/p/gorilla/mux"
 	"document"
-	"labix.org/v2/mgo"
 	"log"
 	"net/http"
-	_ "net/http/pprof"
-	"net/rpc"
+	"posting"
 	"query"
 	"queue"
+	"registry"
 )
 
-var c *rpc.Client
-var s *mgo.Session
+var r *registry.Registry
 
-func getCollection(name string) *mgo.Collection {
-	return s.Clone().DB("superfastmatch").C(name)
-}
-
-func getDb() *mgo.Database {
-	return s.Clone().DB("superfastmatch")
-}
+var c *posting.Client
 
 type QueuedResponse struct {
 	Success bool   `json:"success"`
@@ -29,7 +21,7 @@ type QueuedResponse struct {
 }
 
 func testHandler(rw http.ResponseWriter, req *http.Request) *appError {
-	item, err := queue.NewQueueItem(getDb(), "Test Corpus", nil, nil, nil, nil, req.Body)
+	item, err := queue.NewQueueItem(r, "Test Corpus", nil, nil, nil, nil, req.Body)
 	if err != nil {
 		return &appError{err, "Test Corpus Problem", 500}
 	}
@@ -40,7 +32,7 @@ func documentsHandler(rw http.ResponseWriter, req *http.Request) *appError {
 	fillValues(req)
 	switch req.Method {
 	case "GET":
-		documents, err := query.GetDocuments(&req.Form, getDb())
+		documents, err := query.GetDocuments(&req.Form, r)
 		if err != nil {
 			return &appError{err, "Document not found", 404}
 		}
@@ -56,7 +48,7 @@ func documentHandler(rw http.ResponseWriter, req *http.Request) *appError {
 		if err != nil {
 			return &appError{err, "Get document error", 500}
 		}
-		document, err := document.GetDocument(id, getDb())
+		document, err := document.GetDocument(id, r)
 		if err != nil {
 			return &appError{err, "Document not found", 404}
 		}
@@ -66,7 +58,7 @@ func documentHandler(rw http.ResponseWriter, req *http.Request) *appError {
 		if err != nil {
 			return &appError{err, "Add document error", 500}
 		}
-		item, err := queue.NewQueueItem(getDb(), "Add Document", nil, target, nil, nil, req.Body)
+		item, err := queue.NewQueueItem(r, "Add Document", nil, target, nil, nil, req.Body)
 		if err != nil {
 			return &appError{err, "Add document error", 500}
 		}
@@ -76,7 +68,7 @@ func documentHandler(rw http.ResponseWriter, req *http.Request) *appError {
 		if err != nil {
 			return &appError{err, "Delete document error", 500}
 		}
-		item, err := queue.NewQueueItem(getDb(), "Delete Document", nil, target, nil, nil, req.Body)
+		item, err := queue.NewQueueItem(r, "Delete Document", nil, target, nil, nil, req.Body)
 		if err != nil {
 			return &appError{err, "Delete document error", 500}
 		}
@@ -85,27 +77,32 @@ func documentHandler(rw http.ResponseWriter, req *http.Request) *appError {
 	return nil
 }
 
-func Serve(mongoConnection string, rpcConnection string) {
-	session, err := mgo.Dial(mongoConnection)
+func indexHandler(rw http.ResponseWriter, req *http.Request) *appError {
+	fillValues(req)
+	rows, err := c.GetRows(&req.Form)
 	if err != nil {
-		log.Fatal("Cannot create Mongo session:", err)
+		return &appError{err, "Index problem", 500}
 	}
-	s = session
-	defer s.Close()
-	client, err := rpc.DialHTTP("tcp", rpcConnection)
+	return writeJson(rw, req, rows, 200)
+}
+
+func Serve(registry *registry.Registry) {
+	r = registry
+	var err error
+	c, err = posting.NewClient(registry)
 	if err != nil {
-		log.Fatal("dialing:", err)
+		panic(err)
 	}
-	c = client
 	defer c.Close()
-	queue.Start(getDb())
-	defer queue.Stop()
-
-	r := mux.NewRouter().StrictSlash(true)
-	r.Handle("/document/", appHandler(documentsHandler)).Methods("GET", "DELETE")
-	r.Handle("/document/test/", appHandler(testHandler)).Methods("POST")
-	r.Handle("/document/{doctypes:(((\\d+-\\d+):?|(\\d+):?))+}/", appHandler(documentsHandler)).Methods("GET", "DELETE")
-	r.Handle("/document/{doctype:[0-9]+}/{docid:[0-9]+}/", appHandler(documentHandler)).Methods("GET", "POST", "DELETE")
-	http.ListenAndServe(":8080", r)
-
+	router := mux.NewRouter().StrictSlash(true)
+	router.Handle("/document/", appHandler(documentsHandler)).Methods("GET", "DELETE")
+	router.Handle("/document/test/", appHandler(testHandler)).Methods("POST")
+	router.Handle("/document/{doctypes:(((\\d+-\\d+):?|(\\d+):?))+}/", appHandler(documentsHandler)).Methods("GET", "DELETE")
+	router.Handle("/document/{doctype:[0-9]+}/{docid:[0-9]+}/", appHandler(documentHandler)).Methods("GET", "POST", "DELETE")
+	router.Handle("/index/", appHandler(indexHandler)).Methods("GET")
+	log.Println("Starting API server on:", registry.ApiListener.Addr().String())
+	registry.Routines.Add(1)
+	http.Serve(registry.ApiListener, router)
+	log.Println("Stopping API server")
+	registry.Routines.Done()
 }

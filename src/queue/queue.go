@@ -11,11 +11,11 @@ import (
 	"labix.org/v2/mgo/bson"
 	"log"
 	"net/url"
+	"posting"
 	"query"
+	"registry"
 	"time"
 )
-
-var stop chan bool
 
 type QueueItem struct {
 	Id          bson.ObjectId              `bson:"_id"`
@@ -29,21 +29,7 @@ type QueueItem struct {
 	Payload     []byte                     `bson:"payload"`
 }
 
-func init() {
-	stop = make(chan bool)
-}
-
-func Start(db *mgo.Database) {
-	log.Println("Starting Queue Processor")
-	go processQueue(db)
-}
-
-func Stop() {
-	log.Println("Stopping Queue Processor")
-	stop <- true
-}
-
-func NewQueueItem(db *mgo.Database, command string,
+func NewQueueItem(registry *registry.Registry, command string,
 	source *document.DocumentID, target *document.DocumentID,
 	sourceRange *query.DocumentQueryParams, targetRange *query.DocumentQueryParams,
 	payload io.Reader) (*QueueItem, error) {
@@ -61,12 +47,15 @@ func NewQueueItem(db *mgo.Database, command string,
 		TargetRange: targetRange,
 		Payload:     buf.Bytes(),
 	}
-	err := item.Save(db)
+	err := item.Save(registry)
+	if err != nil {
+		return nil, err
+	}
 	return &item, err
 }
 
-func (q *QueueItem) Save(db *mgo.Database) error {
-	_, err := db.C("queue").UpsertId(q.Id, q)
+func (q *QueueItem) Save(registry *registry.Registry) error {
+	_, err := registry.C("queue").UpsertId(q.Id, q)
 	return err
 }
 
@@ -112,29 +101,41 @@ func (q *QueueItem) String() string {
 	return buf.String()
 }
 
-func processQueue(db *mgo.Database) {
+func Start(registry *registry.Registry) {
+	log.Println("Starting Queue Processor")
+	quit := make(chan bool)
+	registry.Queue = &quit
+	client, err := posting.NewClient(registry)
+	if err != nil {
+		panic(err)
+	}
+	defer client.Close()
+	err = client.Initialise()
+	if err != nil {
+		panic(err)
+	}
+	queue := registry.C("queue")
 	for {
 		select {
-		case <-stop:
+		case <-*registry.Queue:
 			log.Println("Queue Processor Stopped")
 			return
-		default:
+		case <-time.After(1 * time.Second):
 			var item QueueItem
-			iter := db.C("queue").Find(bson.M{"status": "Queued"}).Sort("_id").Iter()
+			iter := queue.Find(bson.M{"status": "Queued"}).Sort("_id").Iter()
 			for iter.Next(&item) {
-				if err := item.Execute(db); err != nil {
+				if err := item.Execute(registry, client); err != nil {
 					panic(err)
 				}
 			}
 			if iter.Err() != nil {
 				panic(iter.Err())
 			}
-			time.Sleep(1 * time.Second)
 		}
 	}
 }
 
-func Stats(db *mgo.Database) (map[string]int, error) {
+func Stats(registry *registry.Registry) (map[string]int, error) {
 	job := &mgo.MapReduce{
 		Map:    "function() { emit(this.status, 1) }",
 		Reduce: "function(key, values) { return Array.sum(values) }",
@@ -143,7 +144,7 @@ func Stats(db *mgo.Database) (map[string]int, error) {
 		Id    string "_id"
 		Value int
 	}
-	_, err := db.C("queue").Find(nil).MapReduce(job, &result)
+	_, err := registry.C("queue").Find(nil).MapReduce(job, &result)
 	if err != nil {
 		return nil, err
 	}

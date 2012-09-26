@@ -7,6 +7,7 @@ import (
 	"labix.org/v2/mgo/bson"
 	"net/url"
 	"reflect"
+	"registry"
 	"strconv"
 	"strings"
 )
@@ -49,6 +50,9 @@ func fillResult(r interface{}, query *mgo.Query) error {
 }
 
 func parseDocTypeRange(r string) bson.M {
+	if len(r) == 0 {
+		return bson.M{}
+	}
 	sections := strings.Split(r, ":")
 	filter := make([]bson.M, len(sections))
 	for i, f := range sections {
@@ -64,7 +68,7 @@ func parseDocTypeRange(r string) bson.M {
 	return bson.M{"$or": filter}
 }
 
-func GetDocuments(values *url.Values, db *mgo.Database) (*DocumentResult, error) {
+func GetDocuments(values *url.Values, registry *registry.Registry) (*DocumentResult, error) {
 	q := new(DocumentQueryParams)
 	r := new(DocumentResult)
 	decoder.Decode(q, *values)
@@ -73,7 +77,7 @@ func GetDocuments(values *url.Values, db *mgo.Database) (*DocumentResult, error)
 	}
 	q.Select = bson.M{"text": 0}
 	q.DefaultSort = []string{"doctype", "docid"}
-	docs := q.getQuery(values, db.C("documents"))
+	docs := q.getQuery(values, registry.C("documents"))
 	if err := docs.All(&r.Rows); err != nil {
 		return nil, err
 	}
@@ -81,4 +85,12 @@ func GetDocuments(values *url.Values, db *mgo.Database) (*DocumentResult, error)
 		return nil, err
 	}
 	return r, nil
+}
+
+func GetDocids(docTypeRange string, registry *registry.Registry) ([]document.DocumentID, error) {
+	docs := make([]document.DocumentID, 0)
+	query := parseDocTypeRange(docTypeRange)
+	pipe := []bson.M{{"$project": bson.M{"doctype": "$_id.doctype", "docid": "$_id.docid"}}, {"$match": query}}
+	err := registry.C("documents").Pipe(pipe).All(&docs)
+	return docs, err
 }

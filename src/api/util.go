@@ -35,15 +35,6 @@ func (w gzipResponseWriter) Write(b []byte) (int, error) {
 	return w.Writer.Write(b)
 }
 
-func doRPC(method string, args interface{}, reply interface{}, rw http.ResponseWriter) *appError {
-	call := c.Go(method, args, reply, nil)
-	replyCall := <-call.Done
-	if replyCall.Error != nil {
-		return &appError{replyCall.Error, "RPC Problem", 500}
-	}
-	return nil
-}
-
 func writeJson(rw http.ResponseWriter, req *http.Request, object interface{}, code int) *appError {
 	var enc *json.Encoder
 	if strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {

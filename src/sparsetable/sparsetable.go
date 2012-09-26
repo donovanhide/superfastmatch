@@ -44,7 +44,7 @@ func (s *SparseTable) Set(pos uint64, value []byte) error {
 		return errors.New("Value is greater than 255 bytes.")
 	}
 	if pos > uint64(len(s.lengths)) {
-		return errors.New("Position is out of bounds of this sparsetable")
+		return errors.New(fmt.Sprintf("Position %v is out of bounds of this sparsetable.", pos))
 	}
 	if len(value) > 0 {
 		s.count++
@@ -59,7 +59,7 @@ func (s *SparseTable) Set(pos uint64, value []byte) error {
 
 func (s *SparseTable) Get(pos uint64) ([]byte, error) {
 	if pos > uint64(len(s.lengths)) {
-		return nil, errors.New("Position is out of bounds of this sparsetable")
+		return nil, errors.New(fmt.Sprintf("Position %v is out of bounds of this sparsetable.", pos))
 	}
 	group, start, end := s.getOffsets(pos)
 	return s.groups[group][start:end], nil
