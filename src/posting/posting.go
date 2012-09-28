@@ -34,6 +34,7 @@ func newPosting(registry *registry.Registry, prefix string) *Posting {
 func (p *Posting) add(doc *document.Document) error {
 	start := time.Now()
 	count := 0
+	l := NewPostingLine()
 	for _, hash := range doc.Hashes(p.hashKey) {
 		pos := hash - p.offset
 		if pos < p.size {
@@ -42,8 +43,7 @@ func (p *Posting) add(doc *document.Document) error {
 			if err != nil {
 				return err
 			}
-			l, err := ReadPostingLine(bytes.NewReader(b))
-			if err != nil {
+			if err := l.Read(bytes.NewReader(b)); err != nil {
 				return err
 			}
 			l.AddDocumentId(&doc.Id)
@@ -115,6 +115,7 @@ func (p *Posting) List(in Query, out *Query) error {
 		out.Start = p.offset
 	}
 	end := p.offset + p.size
+	l := NewPostingLine()
 	for out.Start < end && out.Limit > 0 {
 		b, err := p.table.Get(out.Start - p.offset)
 		if err != nil {
@@ -124,8 +125,7 @@ func (p *Posting) List(in Query, out *Query) error {
 		if len(b) == 0 {
 			continue
 		}
-		l, err := ReadPostingLine(bytes.NewReader(b))
-		if err != nil {
+		if err := l.Read(bytes.NewReader(b)); err != nil {
 			return err
 		}
 		doctypes := make([]Doctype, len(l.Headers))

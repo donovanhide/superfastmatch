@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"document"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
 )
+
+const maxPostingLength = 255
 
 type Header struct {
 	Doctype uint64
@@ -59,17 +62,26 @@ func (p *PostingLine) AddDocumentId(id *document.DocumentID) {
 	p.Headers[i].Length += p.Blocks[i].addDocid(docid)
 }
 
-func ReadPostingLine(r *bytes.Reader) (p *PostingLine, err error) {
-	p = new(PostingLine)
+func NewPostingLine() *PostingLine {
+	return &PostingLine{
+		Headers: make([]Header, maxPostingLength),
+		Blocks:  make([]Block, maxPostingLength),
+	}
+}
+
+func (p *PostingLine) Read(r *bytes.Reader) error {
+	var err error
 	p.Length = r.Len()
 	p.Count, err = binary.ReadUvarint(r)
 	if err == io.EOF {
 		p.Count = 0
-		err = nil
-		return
+		return nil
 	}
-	p.Headers = make([]Header, p.Count)
-	p.Blocks = make([]Block, p.Count)
+	if p.Count > uint64(cap(p.Headers)) {
+		return errors.New("Line is too long")
+	}
+	p.Headers = p.Headers[0:p.Count]
+	p.Blocks = p.Blocks[0:p.Count]
 	for i := uint64(0); i < p.Count; i++ {
 		p.Headers[i].Doctype, err = binary.ReadUvarint(r)
 		p.Headers[i].Length, err = binary.ReadUvarint(r)
@@ -81,13 +93,13 @@ func ReadPostingLine(r *bytes.Reader) (p *PostingLine, err error) {
 		for j, length := uint64(0), p.Headers[i].Length; j < length; j++ {
 			current, err := binary.ReadUvarint(r)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			block.Docids[j] = previous + current
 			previous += current
 		}
 	}
-	return p, nil
+	return nil
 }
 
 func writeUvarint(w io.Writer, buf []byte, value uint64) int {

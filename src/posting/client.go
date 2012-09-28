@@ -17,10 +17,10 @@ type Client struct {
 type Query struct {
 	Start  uint64 `schema:"start"`
 	Limit  int    `schema:"limit"`
-	Result Result
+	Result ListResult
 }
 
-type Result struct {
+type ListResult struct {
 	TotalRows uint64 `json:"totalRows"`
 	Rows      []Row  `json:"rows"`
 }
@@ -87,7 +87,7 @@ func (p *Client) CallMultiple(service string, args interface{}) error {
 	return nil
 }
 
-func (p *Client) GetRows(values *url.Values) (*Result, error) {
+func (p *Client) GetRows(values *url.Values) (*ListResult, error) {
 	result := Query{
 		Start: 0,
 		Limit: 100,

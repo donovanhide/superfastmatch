@@ -48,9 +48,9 @@ func (f fakePostings) String() string {
 
 func (s *PostingSuite) TestPostingLine(c *C) {
 	const docCount = 100000
+	line := NewPostingLine()
 	b := make([]byte, 0)
-	r := bytes.NewReader(b)
-	line, err := ReadPostingLine(r)
+	err := line.Read(bytes.NewReader(b))
 	c.Check(err, IsNil)
 	c.Check(line.Count, Equals, uint64(0))
 	postings := make(fakePostings, docCount)
@@ -65,15 +65,17 @@ func (s *PostingSuite) TestPostingLine(c *C) {
 	}
 	c.Check(line.String(), Equals, postings.String())
 	b2 := line.Write()
-	line2, err := ReadPostingLine(bytes.NewReader(b2))
+	line2 := NewPostingLine()
+	err = line2.Read(bytes.NewReader(b2))
 	c.Check(err, IsNil)
 	c.Check(line2.String(), Equals, postings.String())
 }
 
 func (s *PostingSuite) BenchmarkPostingLine(c *C) {
 	b := make([]byte, 0)
-	r := bytes.NewReader(b)
-	line, _ := ReadPostingLine(r)
+	line := NewPostingLine()
+	err := line.Read(bytes.NewReader(b))
+	c.Check(err, IsNil)
 	for i := 0; i <= c.N; i++ {
 		doctype := rand.Uint32()%100 + 1
 		docid := rand.Uint32()%100 + 1
