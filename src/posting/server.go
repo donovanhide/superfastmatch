@@ -3,10 +3,9 @@ package posting
 import (
 	"log"
 	"net"
-	"strings"
-	// "net/http"
 	"net/rpc"
 	"registry"
+	"strings"
 )
 
 func serve(registry *registry.Registry, l *net.Listener) {

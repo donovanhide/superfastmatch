@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-const width uint64 = 1 << 24
+const width uint64 = 1 << 26
 const length int32 = 255
 const groupSize uint64 = 48
 

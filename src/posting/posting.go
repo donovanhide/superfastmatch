@@ -10,6 +10,7 @@ import (
 	"query"
 	"registry"
 	"sparsetable"
+	"time"
 )
 
 type Posting struct {
@@ -31,10 +32,12 @@ func newPosting(registry *registry.Registry, prefix string) *Posting {
 }
 
 func (p *Posting) add(doc *document.Document) error {
-	p.logger.Printf("Adding Document: %v", doc.Id)
+	start := time.Now()
+	count := 0
 	for _, hash := range doc.Hashes(p.hashKey) {
 		pos := hash - p.offset
 		if pos < p.size {
+			count++
 			b, err := p.table.Get(pos)
 			if err != nil {
 				return err
@@ -50,6 +53,7 @@ func (p *Posting) add(doc *document.Document) error {
 			}
 		}
 	}
+	p.logger.Printf("Added Document: %v with %v hashes at %.0f hashes/sec", doc.Id.String(), count, float64(count)/time.Now().Sub(start).Seconds())
 	p.documents++
 	return nil
 }
@@ -103,15 +107,20 @@ func (p *Posting) Search(doc *document.Document, result *document.SearchResult) 
 	return nil
 }
 
-func (p *Posting) List(query *QueryParams, result *ListResult) error {
-	i := query.Start + uint64(len(result.Rows))
+func (p *Posting) List(in Query, out *Query) error {
+	out.Start = in.Start
+	out.Limit = in.Limit
+	out.Result = in.Result
+	if out.Start < p.offset {
+		out.Start = p.offset
+	}
 	end := p.offset + p.size
-	for i < end && len(result.Rows) < query.Limit {
-		b, err := p.table.Get(i)
+	for out.Start < end && out.Limit > 0 {
+		b, err := p.table.Get(out.Start - p.offset)
 		if err != nil {
 			return err
 		}
-		i++
+		out.Start++
 		if len(b) == 0 {
 			continue
 		}
@@ -119,20 +128,22 @@ func (p *Posting) List(query *QueryParams, result *ListResult) error {
 		if err != nil {
 			return err
 		}
-		h := Hash{
-			Hash:  i,
-			Bytes: len(b),
-		}
+		doctypes := make([]Doctype, len(l.Headers))
 		for j, _ := range l.Headers {
-			h.Doctypes = Doctypes{
+			doctypes[j] = Doctype{
 				Doctype: l.Headers[j].Doctype,
 				Docids:  l.Blocks[j].Docids,
 				Deltas:  l.Blocks[j].Deltas(),
 			}
 		}
-		result.Rows = append(result.Rows, h)
+		out.Result.Rows = append(out.Result.Rows, Row{
+			Hash:     out.Start - 1,
+			Bytes:    len(b),
+			Doctypes: doctypes,
+		})
+		out.Limit--
 	}
-	result.TotalRows += p.table.Count()
+	out.Result.TotalRows += p.table.Count()
 	return nil
 }
 

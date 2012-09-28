@@ -14,26 +14,27 @@ type Client struct {
 	configs []registry.PostingConfig
 }
 
-type QueryParams struct {
-	Start uint64 `schema:"start"`
-	Limit int    `schema:"limit"`
+type Query struct {
+	Start  uint64 `schema:"start"`
+	Limit  int    `schema:"limit"`
+	Result Result
 }
 
-type Doctypes struct {
+type Result struct {
+	TotalRows uint64 `json:"totalRows"`
+	Rows      []Row  `json:"rows"`
+}
+
+type Row struct {
+	Hash     uint64    `json:"hash"`
+	Bytes    int       `json:"bytes"`
+	Doctypes []Doctype `json:"doctypes"`
+}
+
+type Doctype struct {
 	Doctype uint64   `json:"doctype"`
 	Docids  []uint64 `json:"docids"`
 	Deltas  []uint64 `json:"deltas"`
-}
-
-type Hash struct {
-	Hash     uint64   `json:"hash"`
-	Bytes    int      `json:"bytes"`
-	Doctypes Doctypes `json:"doctypes"`
-}
-
-type ListResult struct {
-	Rows      []Hash `json:"rows"`
-	TotalRows uint64 `json:"totalRows"`
 }
 
 func NewClient(registry *registry.Registry) (*Client, error) {
@@ -86,20 +87,16 @@ func (p *Client) CallMultiple(service string, args interface{}) error {
 	return nil
 }
 
-func (p *Client) GetRows(values *url.Values) (*ListResult, error) {
-	q := &QueryParams{
+func (p *Client) GetRows(values *url.Values) (*Result, error) {
+	result := Query{
 		Start: 0,
 		Limit: 100,
 	}
-	r := new(ListResult)
-	decoder.Decode(q, *values)
+	decoder.Decode(&result, *values)
 	for i, _ := range p.clients {
-		if p.configs[i].Offset+p.configs[i].Size > q.Start {
-			err := p.clients[i].Call("Posting.List", q, r)
-			if err != nil {
-				return nil, err
-			}
+		if err := p.clients[i].Call("Posting.List", result, &result); err != nil {
+			return nil, err
 		}
 	}
-	return r, nil
+	return &result.Result, nil
 }

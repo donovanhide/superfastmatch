@@ -118,10 +118,16 @@ func (document *Document) NormalisedText() string {
 }
 
 func (document *Document) Hashes(key HashKey) []uint64 {
-	length := document.Length - key.WindowSize + 1
-	hashes := document.hashes[key]
-	if len(hashes) == 0 && length > 0 {
-		hashes = rollingRabinKarp(document.NormalisedText(), length, key)
+	hashes, ok := document.hashes[key]
+	if !ok {
+		length := document.Length - key.WindowSize + 1
+		if length > 0 {
+			hashes = rollingRabinKarp(document.NormalisedText(), length, key)
+		}
+		if document.hashes == nil {
+			document.hashes = make(map[HashKey][]uint64)
+		}
+		document.hashes[key] = hashes
 	}
 	return hashes
 }

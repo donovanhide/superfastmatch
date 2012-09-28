@@ -44,7 +44,7 @@ func rollingRabinKarp(text string, length uint64, key HashKey) []uint64 {
 		previous[i] = uint64(r)
 		hash += uint64(r) * bases[i]
 	}
-	hashes[0] = (hash >> hashWidth) ^ (hash & hashMask)
+	hashes[0] = ((hash >> hashWidth) ^ hash) & hashMask
 	for i := uint64(1); i < length; i++ {
 		r, _, _ := reader.ReadRune()
 		hash -= previous[previousMarker] * high
@@ -52,7 +52,7 @@ func rollingRabinKarp(text string, length uint64, key HashKey) []uint64 {
 		previousMarker = (previousMarker + 1) % windowSize
 		hash *= base
 		hash += uint64(r)
-		hashes[i] = (hash >> hashWidth) ^ (hash & hashMask)
+		hashes[i] = ((hash >> hashWidth) ^ hash) & hashMask
 	}
 	return hashes
 }

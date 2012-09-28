@@ -11,7 +11,6 @@ import (
 
 type SparseTable struct {
 	groupSize uint64
-	count     uint64
 	lengths   []uint8
 	groups    [][]byte
 }
@@ -31,8 +30,9 @@ func Init(size uint64, groupSize uint64) *SparseTable {
 func (s *SparseTable) getOffsets(pos uint64) (uint64, uint64, uint64) {
 	group := pos / s.groupSize
 	start := uint64(0)
-	for _, value := range s.lengths[group*s.groupSize : pos] {
-		start += uint64(value)
+	section := s.lengths[group*s.groupSize : pos]
+	for i := range section {
+		start += uint64(section[i])
 	}
 	end := start + uint64(s.lengths[pos])
 	// fmt.Printf("Group: %v Start: %v End: %v\n", group, start, end)
@@ -45,11 +45,6 @@ func (s *SparseTable) Set(pos uint64, value []byte) error {
 	}
 	if pos > uint64(len(s.lengths)) {
 		return errors.New(fmt.Sprintf("Position %v is out of bounds of this sparsetable.", pos))
-	}
-	if len(value) > 0 {
-		s.count++
-	} else {
-		s.count--
 	}
 	group, start, end := s.getOffsets(pos)
 	s.groups[group] = append(s.groups[group][:start], append(value, s.groups[group][end:]...)...)
@@ -74,7 +69,13 @@ func (s *SparseTable) Size() uint64 {
 }
 
 func (s *SparseTable) Count() uint64 {
-	return s.count
+	count := uint64(0)
+	for i := range s.lengths {
+		if s.lengths[i] > 0 {
+			count++
+		}
+	}
+	return count
 }
 
 func (s *SparseTable) Memory() uint64 {
