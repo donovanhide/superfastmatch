@@ -25,7 +25,7 @@ func (s *QuerySuite) TestQueue(c *C) {
 	go Start(s.Registry)
 	for i := uint32(1); i <= 20; i++ {
 		target := document.DocumentID{Doctype: 1, Docid: i}
-		item, err := NewQueueItem(s.Registry, "Add Document", nil, &target, nil, nil, strings.NewReader("title=Payload&text=Payload"))
+		item, err := NewQueueItem(s.Registry, "Add Document", nil, &target, nil, nil, strings.NewReader("title=Payload&text=PayloadWithsometextlongerthanwindowsize"))
 		c.Check(item, NotNil)
 		c.Check(err, IsNil)
 	}

@@ -16,6 +16,8 @@ type PostingSuite struct {
 
 var _ = Suite(&PostingSuite{})
 
+const docCount = 10
+
 func (s *PostingSuite) TestSimpleAddDocument(c *C) {
 	text := document.RandomWords(120)
 	p := newPosting(s.Registry, "test")
@@ -35,7 +37,7 @@ func (s *PostingSuite) TestSimpleAddDocument(c *C) {
 func (s *PostingSuite) TestAddDocumentWithoutClient(c *C) {
 	p := newPosting(s.Registry, "test")
 	p.Init(&s.Registry.PostingConfigs[0], nil)
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < docCount; i++ {
 		id := &document.DocumentID{
 			Doctype: rand.Uint32()%100 + 1,
 			Docid:   rand.Uint32()%500 + 1,
@@ -54,7 +56,7 @@ func (s *PostingSuite) TestAddDocumentViaClient(c *C) {
 	client, err := NewClient(s.Registry)
 	client.Initialise()
 	c.Check(err, IsNil)
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < docCount; i++ {
 		id := &document.DocumentID{
 			Doctype: rand.Uint32()%100 + 1,
 			Docid:   rand.Uint32()%500 + 1,

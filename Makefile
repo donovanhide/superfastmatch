@@ -1,3 +1,5 @@
+export GOPATH := $(shell pwd)
+
 run:
 	go install -v superfastmatch
 	go build -v -o ./bin/superfastmatch superfastmatch
@@ -25,7 +27,7 @@ benchmark:
 	rm *.out
 	rm *.test
 
-test: 
+test:
 	go test sparsetable
 	go test posting
 	go test document

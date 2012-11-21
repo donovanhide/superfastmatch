@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"document"
 	"fmt"
-	"io"
 	. "launchpad.net/gocheck"
 	"math/rand"
 	"sort"
@@ -54,46 +53,50 @@ func (f fakePostings) Add(doctype uint32, docid uint32) {
 	f[doctype][docid] = struct{}{}
 }
 
-func CheckLine(c *C, line *PostingLine, doctype uint32, docid uint32, length int) {
+func CheckLine(c *C, line *PostingLine, buf []byte, doctype uint32, docid uint32, length int) []byte {
+	line.Write(buf)
 	line.AddDocumentId(&document.DocumentID{Doctype: doctype, Docid: docid})
-	buf := make([]byte, line.Length)
-	line.Read(buf)
 	if line.Length != length {
 		c.Log("Fail:", doctype, docid, length, line.Length, line.count, buf)
 		c.Fail()
 	} else {
 		c.Log("Pass:", doctype, docid, length, line.Length, line.count, buf)
 	}
+	newBuf := make([]byte, line.Length)
+	line.Read(newBuf)
+	return newBuf
 }
 
 func (s *PostingSuite) TestLineLength(c *C) {
 	line := NewPostingLine()
+	buf := make([]byte, 0)
 	c.Check(line.Length, Equals, 1)
-	CheckLine(c, line, 2, 1, 4)
-	CheckLine(c, line, 2, 1, 4)
-	CheckLine(c, line, 2, 2, 5)
-	CheckLine(c, line, 2, 3, 6)
-	CheckLine(c, line, 2, 1999, 8)
-	CheckLine(c, line, 1, 45, 11)
-	CheckLine(c, line, 1, 32, 12)
-	CheckLine(c, line, 1, 999, 14)
-	CheckLine(c, line, 3, 999, 18)
-	CheckLine(c, line, 3, 300000000, 23)
-	CheckLine(c, line, 3, 1, 24)
+	buf = CheckLine(c, line, buf, 2, 1, 4)
+	buf = CheckLine(c, line, buf, 2, 1, 4)
+	buf = CheckLine(c, line, buf, 2, 2, 5)
+	buf = CheckLine(c, line, buf, 2, 3, 6)
+	buf = CheckLine(c, line, buf, 2, 1999, 8)
+	buf = CheckLine(c, line, buf, 1, 45, 11)
+	buf = CheckLine(c, line, buf, 1, 32, 12)
+	buf = CheckLine(c, line, buf, 1, 999, 14)
+	buf = CheckLine(c, line, buf, 3, 999, 18)
+	buf = CheckLine(c, line, buf, 3, 300000000, 23)
+	buf = CheckLine(c, line, buf, 3, 1, 24)
 	// This should never happen!
-	CheckLine(c, line, 3, 0, 25)
+	buf = CheckLine(c, line, buf, 3, 0, 25)
 }
 
 func (s *PostingSuite) TestLineLengthSpecficExample(c *C) {
 	line := NewPostingLine()
+	buf := make([]byte, 0)
 	c.Check(line.Length, Equals, 1)
-	CheckLine(c, line, 8, 105, 4)
-	CheckLine(c, line, 59, 12, 4)
-	CheckLine(c, line, 53, 55, 5)
-	CheckLine(c, line, 81, 334, 6)
-	CheckLine(c, line, 94, 194, 8)
-	CheckLine(c, line, 5, 114, 8)
-	CheckLine(c, line, 94, 266, 11)
+	buf = CheckLine(c, line, buf, 8, 105, 4)
+	buf = CheckLine(c, line, buf, 59, 12, 7)
+	buf = CheckLine(c, line, buf, 53, 55, 10)
+	buf = CheckLine(c, line, buf, 81, 334, 14)
+	buf = CheckLine(c, line, buf, 94, 194, 18)
+	buf = CheckLine(c, line, buf, 5, 114, 21)
+	buf = CheckLine(c, line, buf, 94, 266, 22)
 }
 
 func (s *PostingSuite) TestInsertDocid(c *C) {
@@ -120,31 +123,6 @@ func (s *PostingSuite) TestInsertDocid(c *C) {
 	}
 	sort.Sort(UIntSlice(sorted))
 	c.Check(decodeDocids(deltas), DeepEquals, sorted)
-}
-
-func (s *PostingSuite) TestPostingLine(c *C) {
-	const docCount = 100000
-	postings := make(fakePostings, docCount)
-	line := NewPostingLine()
-	reader := make([]byte, 0, 4096)
-	writer := make([]byte, 0, 4096)
-	readBuf := bytes.NewBuffer(reader)
-	writeBuf := bytes.NewBuffer(writer)
-	c.Check(line.Length, Equals, 1)
-	for i := 0; i <= docCount; i++ {
-		_, err := readBuf.WriteTo(line)
-		c.Assert(err, IsNil)
-		doctype := rand.Uint32()%500 + 1
-		docid := rand.Uint32()%500 + 1
-		if line.AddDocumentId(&document.DocumentID{Doctype: doctype, Docid: docid}) {
-			postings.Add(doctype, docid)
-		}
-		_, err = writeBuf.ReadFrom(line)
-		c.Assert(err, IsNil)
-		_, err = io.Copy(readBuf, writeBuf)
-		c.Assert(err, IsNil)
-	}
-	c.Check(line.String(), Equals, postings.String())
 }
 
 func (s *PostingSuite) BenchmarkPostingLine(c *C) {
