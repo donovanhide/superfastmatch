@@ -32,9 +32,9 @@ type Row struct {
 }
 
 type Doctype struct {
-	Doctype uint64   `json:"doctype"`
-	Docids  []uint64 `json:"docids"`
-	Deltas  []uint64 `json:"deltas"`
+	Doctype uint32   `json:"doctype"`
+	Docids  []uint32 `json:"docids"`
+	Deltas  []uint32 `json:"deltas"`
 }
 
 func NewClient(registry *registry.Registry) (*Client, error) {

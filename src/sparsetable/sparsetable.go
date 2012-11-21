@@ -2,17 +2,40 @@ package sparsetable
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"unsafe"
 )
 
+const MAX_SIZE = 255
+
+type Error struct {
+	pos         uint64
+	Full        bool
+	OutOfBounds bool
+	ShortRead   bool
+}
+
+func (e *Error) Error() string {
+	msg := ""
+	switch {
+	case e.Full:
+		msg = "Sparsetable full for position %v"
+	case e.OutOfBounds:
+		msg = "Position %v out of bounds of sparsetable"
+	case e.ShortRead:
+		msg = "Short Read for position %v"
+	}
+	return fmt.Sprintf(msg, e.pos)
+}
+
 type SparseTable struct {
 	groupSize uint64
 	lengths   []uint8
 	groups    [][]byte
+	buffer    []byte
 }
 
 func Init(size uint64, groupSize uint64) *SparseTable {
@@ -24,6 +47,7 @@ func Init(size uint64, groupSize uint64) *SparseTable {
 		groupSize: groupSize,
 		lengths:   make([]uint8, size),
 		groups:    make([][]byte, groupCount),
+		buffer:    make([]byte, MAX_SIZE),
 	}
 }
 
@@ -35,33 +59,52 @@ func (s *SparseTable) getOffsets(pos uint64) (uint64, uint64, uint64) {
 		start += uint64(section[i])
 	}
 	end := start + uint64(s.lengths[pos])
-	// fmt.Printf("Group: %v Start: %v End: %v\n", group, start, end)
 	return group, start, end
 }
 
-func (s *SparseTable) Set(pos uint64, value []byte) error {
-	if len(value) > 255 {
-		return errors.New("Value is greater than 255 bytes.")
-	}
-	if pos > uint64(len(s.lengths)) {
-		return errors.New(fmt.Sprintf("Position %v is out of bounds of this sparsetable.", pos))
-	}
-	group, start, end := s.getOffsets(pos)
-	s.groups[group] = append(s.groups[group][:start], append(value, s.groups[group][end:]...)...)
-	s.lengths[pos] = uint8(len(value))
-	return nil
+func (s *SparseTable) SetBytes(pos uint64, b []byte) error {
+	r := bytes.NewReader(b)
+	return s.Set(pos, r, len(b))
 }
 
-func (s *SparseTable) Get(pos uint64) ([]byte, error) {
+func (s *SparseTable) Set(pos uint64, r io.Reader, length int) error {
 	if pos > uint64(len(s.lengths)) {
-		return nil, errors.New(fmt.Sprintf("Position %v is out of bounds of this sparsetable.", pos))
+		return &Error{pos: pos, OutOfBounds: true}
+	}
+	if length >= MAX_SIZE {
+		return &Error{pos: pos, Full: true}
 	}
 	group, start, end := s.getOffsets(pos)
-	return s.groups[group][start:end], nil
+	s.lengths[pos] = uint8(length)
+	n, err := r.Read(s.buffer[:length])
+	if n != length {
+		return &Error{pos: pos, ShortRead: true}
+	}
+	s.groups[group] = append(s.groups[group][:start], append(s.buffer[:length], s.groups[group][end:]...)...)
+	if err == io.EOF {
+		return nil
+	}
+	return err
+}
+
+func (s *SparseTable) Get(pos uint64, w io.Writer) error {
+	if pos > uint64(len(s.lengths)) {
+		return &Error{pos: pos, OutOfBounds: true}
+	}
+	group, start, end := s.getOffsets(pos)
+	_, err := w.Write(s.groups[group][start:end])
+	return err
+}
+
+func (s *SparseTable) GetBytes(pos uint64) ([]byte, error) {
+	buf := new(bytes.Buffer)
+	err := s.Get(pos, buf)
+	return buf.Bytes(), err
 }
 
 func (s *SparseTable) Remove(pos uint64) error {
-	return s.Set(pos, []byte(nil))
+	b := []byte(nil)
+	return s.Set(pos, bytes.NewReader(b), len(b))
 }
 
 func (s *SparseTable) Size() uint64 {
@@ -89,10 +132,12 @@ func (s *SparseTable) String() string {
 		groups[i] = strconv.Itoa(len(s.groups[i]))
 	}
 	buffer.WriteString(fmt.Sprintf("SparseTable Count:%v Size: %v\nGroups: [%s]\n", s.Count(), s.Size(), strings.Join(groups, ",")))
+	buf := new(bytes.Buffer)
 	for i := uint64(0); i < s.Size(); i++ {
-		value, _ := s.Get(i)
-		if len(value) > 0 {
-			buffer.WriteString(fmt.Sprintf("%v: \"%s\"\n", i, value))
+		s.Get(i, buf)
+		if buf.Len() > 0 {
+			buffer.WriteString(fmt.Sprintf("%v: \"%s\"\n", i, buf.String()))
+			buf.Reset()
 		}
 	}
 	return buffer.String()

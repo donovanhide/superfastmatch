@@ -3,6 +3,11 @@ run:
 	go build -v -o ./bin/superfastmatch superfastmatch
 	./bin/superfastmatch
 
+dist:
+	bash -c "source scripts/crosscompile.bash && go-windows-amd64 build -o builds/superfastmatch.exe superfastmatch"
+	bash -c "source scripts/crosscompile.bash && go-darwin-amd64 build -o builds/superfastmatch-darwin superfastmatch"
+	bash -c "source scripts/crosscompile.bash && go-linux-amd64 build -o builds/superfastmatch-linux superfastmatch"
+
 algo: 
 	go test -x -c document
 	mv document.test src/document

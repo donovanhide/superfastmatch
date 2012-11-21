@@ -118,28 +118,27 @@ func BuildTestCorpus(maxDoctype uint32, maxDocid uint32, maxLength int) chan *Do
 	return docs
 }
 
-func NewTestDocument(id *DocumentID, maxLength int) (*Document, error) {
+func RandomWords(maxLength int) string {
 	if len(words) == 0 {
 		content, err := ioutil.ReadFile("/usr/share/dict/words")
 		if err != nil {
-			return nil, err
+			panic("Words not available")
 		}
 		words = strings.Split(string(content), "\n")
 	}
-	title := new(bytes.Buffer)
 	text := new(bytes.Buffer)
-	titleLength := rand.Intn(5) + 5
-	textLength := rand.Intn(maxLength) + 100
-	for i := 0; i < titleLength; i++ {
-		title.WriteString(words[rand.Intn(len(words))] + " ")
-	}
-	for i := 0; i < textLength; i++ {
+	for i := 0; i < maxLength; i++ {
 		text.WriteString(words[rand.Intn(len(words))] + " ")
 	}
+	return text.String()
+}
+
+func NewTestDocument(id *DocumentID, maxLength int) (*Document, error) {
+	text := RandomWords(rand.Intn(maxLength) + 100)
 	return &Document{
 		Id:     *id,
-		Title:  title.String(),
-		Text:   text.String(),
-		Length: uint64(utf8.RuneCountInString(text.String())),
+		Title:  RandomWords(rand.Intn(5) + 5),
+		Text:   text,
+		Length: uint64(utf8.RuneCountInString(text)),
 	}, nil
 }

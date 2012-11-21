@@ -2,6 +2,7 @@ package queue
 
 import (
 	"document"
+	"fmt"
 	. "launchpad.net/gocheck"
 	"posting"
 	"strings"
@@ -19,8 +20,8 @@ type QuerySuite struct {
 var _ = Suite(&QuerySuite{})
 
 func (s *QuerySuite) TestQueue(c *C) {
-	go posting.Serve(s.Registry, &s.Registry.PostingListeners[0])
-	go posting.Serve(s.Registry, &s.Registry.PostingListeners[1])
+	fmt.Println(s.Registry)
+	go posting.Serve(s.Registry)
 	go Start(s.Registry)
 	for i := uint32(1); i <= 20; i++ {
 		target := document.DocumentID{Doctype: 1, Docid: i}

@@ -1,10 +1,8 @@
 package posting
 
 import (
-	"bytes"
 	"document"
-	// "expvar"
-	// "fmt"
+	"fmt"
 	"log"
 	"os"
 	"query"
@@ -33,27 +31,47 @@ func newPosting(registry *registry.Registry, prefix string) *Posting {
 
 func (p *Posting) add(doc *document.Document) error {
 	start := time.Now()
-	count := 0
+	hashes := doc.Hashes(p.hashKey)
+	count, dupes, set, saturated := 0, 0, 0, 0
 	l := NewPostingLine()
-	for _, hash := range doc.Hashes(p.hashKey) {
+	for _, hash := range hashes {
 		pos := hash - p.offset
-		if pos < p.size {
-			count++
-			b, err := p.table.Get(pos)
-			if err != nil {
-				return err
-			}
-			if err := l.Read(bytes.NewReader(b)); err != nil {
-				return err
-			}
-			l.AddDocumentId(&doc.Id)
-			err = p.table.Set(pos, l.Write())
-			if err != nil {
-				return err
+		if pos >= p.size {
+			continue
+		}
+		count++
+		if err := p.table.Get(pos, l); err != nil {
+			return err
+		}
+		if !l.AddDocumentId(&doc.Id) {
+			dupes++
+			continue
+		}
+		if err := p.table.Set(pos, l, l.Length); err != nil {
+			if serr, ok := err.(*sparsetable.Error); ok {
+				switch {
+				case serr.Full:
+					saturated++
+				case serr.ShortRead:
+					p.logger.Printf("Short Read for Document: %v Length: %v\n%v", doc.Id.String(), l.Length, l.String())
+				default:
+					return err
+				}
 			}
 		}
+		set++
 	}
-	p.logger.Printf("Added Document: %v with %v hashes at %.0f hashes/sec", doc.Id.String(), count, float64(count)/time.Now().Sub(start).Seconds())
+	if (set + dupes) != count {
+		panic(fmt.Sprintln(count, dupes, set))
+	}
+	p.logger.Printf("Added Document: %v Hashes: %v/%v Ignored: %.2f%% Saturated: %.2f%% Dupes: %.2f%% Speed: %.0f hashes/sec",
+		doc.Id.String(),
+		set,
+		len(hashes),
+		(float64(1)-(float64(count)/float64(len(hashes))))*100,
+		(float64(saturated)/float64(set))*100,
+		(float64(dupes)/float64(set))*100,
+		float64(set)/time.Now().Sub(start).Seconds())
 	p.documents++
 	return nil
 }
@@ -117,28 +135,27 @@ func (p *Posting) List(in Query, out *Query) error {
 	end := p.offset + p.size
 	l := NewPostingLine()
 	for out.Start < end && out.Limit > 0 {
-		b, err := p.table.Get(out.Start - p.offset)
+		err := p.table.Get(out.Start-p.offset, l)
 		if err != nil {
 			return err
 		}
 		out.Start++
-		if len(b) == 0 {
+		if l.Length <= 1 {
 			continue
 		}
-		if err := l.Read(bytes.NewReader(b)); err != nil {
-			return err
-		}
-		doctypes := make([]Doctype, len(l.Headers))
-		for j, _ := range l.Headers {
+		doctypes := make([]Doctype, l.count)
+		for j, h := 0, l.headers.Front(); h != nil && j < int(l.count); h = h.Next() {
+			header := h.Value.(*Header)
 			doctypes[j] = Doctype{
-				Doctype: l.Headers[j].Doctype,
-				Docids:  l.Blocks[j].Docids,
-				Deltas:  l.Blocks[j].Deltas(),
+				Doctype: header.doctype,
+				Docids:  header.Docids(),
+				Deltas:  header.Deltas(),
 			}
+			j++
 		}
 		out.Result.Rows = append(out.Result.Rows, Row{
 			Hash:     out.Start - 1,
-			Bytes:    len(b),
+			Bytes:    l.Length,
 			Doctypes: doctypes,
 		})
 		out.Limit--

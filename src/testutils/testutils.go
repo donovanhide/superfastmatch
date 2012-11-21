@@ -41,7 +41,6 @@ func (s *DBSuite) startMongo() {
 
 func (s *DBSuite) SetUpSuite(c *C) {
 	s.c = c
-	s.Registry = registry.NewRegistry([]string{"-db=test", "-mongo_url=localhost:12345", "-api_address=localhost:9080", "-posting_addresses=localhost:9090,localhost:9091"})
 	s.startMongo()
 }
 
@@ -51,6 +50,7 @@ func (s *DBSuite) TearDownSuite(c *C) {
 
 func (s *DBSuite) SetUpTest(c *C) {
 	s.c.Log("Opening Registry")
+	s.Registry = registry.NewRegistry([]string{"-db=test", "-mongo_url=localhost:12345", "-api_address=localhost:9080", "-posting_addresses=localhost:9090,localhost:9091"})
 	s.Registry.Open()
 	s.c.Log("Dropping Test Database")
 	s.Registry.DropDatabase()

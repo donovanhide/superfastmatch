@@ -70,6 +70,15 @@ func (d *DocumentID) String() string {
 	return fmt.Sprintf("(%v,%v)", d.Doctype, d.Docid)
 }
 
+func BuildDocument(doctype uint32, docid uint32, title string, text string) *Document {
+	return &Document{
+		Id:     DocumentID{Doctype: doctype, Docid: docid},
+		Title:  title,
+		Text:   text,
+		Length: uint64(utf8.RuneCountInString(text)),
+	}
+}
+
 func NewDocument(id *DocumentID, values *url.Values) (*Document, error) {
 	if len(values.Get("title")) == 0 || len(values.Get("text")) == 0 {
 		return nil, errors.New("Missing title or text fields")
