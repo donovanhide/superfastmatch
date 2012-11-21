@@ -28,12 +28,12 @@ benchmark:
 	rm *.test
 
 test:
-	go test sparsetable
-	go test posting
-	go test document
-	go test query
-	go test queue
-	go test registry
+	go test -v sparsetable
+	go test -v posting
+	go test -v document
+	go test -v query
+	go test -v queue
+	go test -v registry
 
 dependencies:
 	go get -u launchpad.net/gocheck
