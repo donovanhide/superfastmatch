@@ -97,6 +97,9 @@ func (p *Client) GetRows(values *url.Values) (*ListResult, error) {
 		if err := p.clients[i].Call("Posting.List", result, &result); err != nil {
 			return nil, err
 		}
+		if len(result.Result.Rows) >= result.Limit {
+			break
+		}
 	}
 	return &result.Result, nil
 }
