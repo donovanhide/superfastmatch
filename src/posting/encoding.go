@@ -60,6 +60,16 @@ func decodeDeltas(deltas []byte) []uint32 {
 	return decoded[:i]
 }
 
+func encodeDeltas(docids []uint32) []uint32 {
+	deltas := make(UIntSlice, len(docids))
+	previous := uint32(0)
+	for i, d := range docids {
+		deltas[i] = d - previous
+		previous = d
+	}
+	return deltas
+}
+
 func decodeDocids(deltas []byte) []uint32 {
 	length := len(deltas)
 	decoded := make([]uint32, length)
@@ -70,6 +80,36 @@ func decodeDocids(deltas []byte) []uint32 {
 		decoded[i] = current
 	}
 	return decoded[:i]
+}
+
+func removeDocid(docid uint32, in []byte, out []byte) ([]byte, bool) {
+	if len(in) == 0 {
+		// fmt.Println("Empty:", docid, in, out[:0])
+		return out[:0], false
+	}
+	length := len(in)
+	previous, current := uint32(0), uint32(0)
+	out = out[:length]
+	for pos := 0; pos < length; {
+		delta, currentPos := readUvarint32(in, pos)
+		current += delta
+		if current == docid {
+			pos = copy(out, in[:pos])
+			v, nextPos := readUvarint32(in, currentPos)
+			next := current + v
+			if next > current {
+				pos = putUvarint32(out, pos, next-previous)
+				pos += copy(out[pos:], in[nextPos:])
+			}
+			// fmt.Println("Found:", docid, in, out[:pos])
+			return out[:pos], true
+		}
+		previous = current
+		pos = currentPos
+	}
+	copy(out, in)
+	// fmt.Println("Not Found:", docid, in, out)
+	return out, false
 }
 
 func insertDocid(docid uint32, in []byte, out []byte) []byte {
@@ -104,6 +144,19 @@ func insertDocid(docid uint32, in []byte, out []byte) []byte {
 	return out[:pos]
 }
 
+func (p *PostingLine) getHeader(doctype uint32) *list.Element {
+	h := p.headers.Front()
+	header := h.Value.(*Header)
+	for i := uint32(0); i < p.count; i++ {
+		if header.doctype == doctype {
+			return h
+		}
+		h = h.Next()
+		header = h.Value.(*Header)
+	}
+	return nil
+}
+
 func (p *PostingLine) addHeader(doctype uint32) *Header {
 	h := p.headers.Front()
 	header := h.Value.(*Header)
@@ -134,6 +187,30 @@ func (p *PostingLine) addHeader(doctype uint32) *Header {
 	p.count++
 	// fmt.Println("Append", doctype, p.count, p.Length, &header)
 	return header
+}
+
+func (p *PostingLine) RemoveDocumentId(id *document.DocumentID) bool {
+	if p.count == 0 {
+		return false
+	}
+	h := p.getHeader(id.Doctype)
+	if h == nil {
+		return false
+	}
+	header := h.Value.(*Header)
+	changed := true
+	header.updated, changed = removeDocid(id.Docid, header.existing, header.updated)
+	if !changed {
+		return false
+	}
+	p.Length -= len(header.existing)
+	p.Length += len(header.updated)
+	if len(header.updated) == 0 {
+		p.count--
+		p.Length -= sizeUVarint32(id.Doctype) + sizeOfZero
+		p.headers.MoveToBack(h)
+	}
+	return true
 }
 
 func (p *PostingLine) AddDocumentId(id *document.DocumentID) bool {

@@ -3,55 +3,9 @@ package posting
 import (
 	"bytes"
 	"document"
-	"fmt"
 	. "launchpad.net/gocheck"
 	"math/rand"
-	"sort"
 )
-
-// Mock up a posting line
-type fakePostings map[uint32]map[uint32]struct{}
-
-type UIntSlice []uint32
-
-func (p UIntSlice) Len() int           { return len(p) }
-func (p UIntSlice) Less(i, j int) bool { return p[i] < p[j] }
-func (p UIntSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-
-func (f fakePostings) String() string {
-	b := new(bytes.Buffer)
-	doctypes := make(UIntSlice, len(f))
-	i := 0
-	for doctype, _ := range f {
-		doctypes[i] = doctype
-		i++
-	}
-	sort.Sort(doctypes)
-	for _, doctype := range doctypes {
-		i = 0
-		docids := make(UIntSlice, len(f[doctype]))
-		for docid, _ := range f[doctype] {
-			docids[i] = docid
-			i++
-		}
-		sort.Sort(docids)
-		deltas := make(UIntSlice, len(docids))
-		previous := uint32(0)
-		for i, d := range docids {
-			deltas[i] = d - previous
-			previous = d
-		}
-		b.WriteString(fmt.Sprintf("Doctype: %v Length: %v Deltas: %v Docids:%v\n", doctype, len(docids), deltas, docids))
-	}
-	return b.String()
-}
-
-func (f fakePostings) Add(doctype uint32, docid uint32) {
-	if _, ok := f[doctype]; !ok {
-		f[doctype] = make(map[uint32]struct{})
-	}
-	f[doctype][docid] = struct{}{}
-}
 
 func CheckLine(c *C, line *PostingLine, buf []byte, doctype uint32, docid uint32, length int) []byte {
 	line.Write(buf)
@@ -99,30 +53,36 @@ func (s *PostingSuite) TestLineLengthSpecficExample(c *C) {
 	buf = CheckLine(c, line, buf, 94, 266, 22)
 }
 
-func (s *PostingSuite) TestInsertDocid(c *C) {
-	docids := make(map[uint32]struct{})
-	deltas := make([]byte, 0, 255)
-	buf := make([]byte, 0, 255)
+func (s *PostingSuite) TestInsertRemoveDocid(c *C) {
+	maxLine := 255
+	docids := make(UInt32Set)
+	deltas := make([]byte, 0, maxLine)
+	buf := make([]byte, 0, maxLine)
 	for i := 0; i <= 10000; i++ {
 		docid := rand.Uint32()%1000 + 1
 		buf = insertDocid(docid, deltas, buf)
 		if len(buf) > 0 {
 			deltas = deltas[:len(buf)]
 			copy(deltas, buf)
+			c.Assert(docids.Add(docid), Equals, true)
 		}
-		_, ok := docids[docid]
-		c.Assert(len(buf) == 0, Equals, ok)
-		docids[docid] = struct{}{}
-		if len(deltas) >= 255 {
+		// c.Assert(len(buf) > 0, Equals, docids.Add(docid))
+		if len(deltas) >= maxLine {
 			break
 		}
+		c.Check(decodeDocids(deltas), DeepEquals, SortedKeys(docids))
 	}
-	sorted := make([]uint32, 0)
-	for k, _ := range docids {
-		sorted = append(sorted, k)
+	changed := true
+	for i := 0; i <= 10000; i++ {
+		docid := rand.Uint32()%1000 + 1
+		buf, changed = removeDocid(docid, deltas, buf)
+		if changed {
+			deltas = deltas[:len(buf)]
+			copy(deltas, buf)
+			c.Assert(docids.Remove(docid), Equals, true)
+		}
+		c.Check(decodeDocids(deltas), DeepEquals, SortedKeys(docids))
 	}
-	sort.Sort(UIntSlice(sorted))
-	c.Check(decodeDocids(deltas), DeepEquals, sorted)
 }
 
 func (s *PostingSuite) BenchmarkPostingLine(c *C) {

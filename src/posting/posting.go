@@ -29,6 +29,53 @@ func newPosting(registry *registry.Registry, prefix string) *Posting {
 	}
 }
 
+func (p *Posting) remove(doc *document.Document) error {
+	start := time.Now()
+	hashes := doc.Hashes(p.hashKey)
+	count, dupes, set, saturated := 0, 0, 0, 0
+	l := NewPostingLine()
+	for _, hash := range hashes {
+		pos := hash - p.offset
+		if pos >= p.size {
+			continue
+		}
+		count++
+		if err := p.table.Get(pos, l); err != nil {
+			return err
+		}
+		if !l.RemoveDocumentId(&doc.Id) {
+			dupes++
+			continue
+		}
+		if err := p.table.Set(pos, l, l.Length); err != nil {
+			if serr, ok := err.(*sparsetable.Error); ok {
+				switch {
+				case serr.Full:
+					saturated++
+				case serr.ShortRead:
+					p.logger.Printf("Short Read for Document: %v Length: %v\n%v", doc.Id.String(), l.Length, l.String())
+				default:
+					return err
+				}
+			}
+		}
+		set++
+	}
+	if (set + dupes) != count {
+		panic(fmt.Sprintln(count, dupes, set))
+	}
+	p.logger.Printf("Removed Document: %v Hashes: %v/%v Ignored: %.2f%% Saturated: %.2f%% Dupes: %.2f%% Speed: %.0f hashes/sec",
+		doc.Id.String(),
+		set,
+		len(hashes),
+		(float64(1)-(float64(count)/float64(len(hashes))))*100,
+		(float64(saturated)/float64(set))*100,
+		(float64(dupes)/float64(set))*100,
+		float64(set)/time.Now().Sub(start).Seconds())
+	p.documents++
+	return nil
+}
+
 func (p *Posting) add(doc *document.Document) error {
 	start := time.Now()
 	hashes := doc.Hashes(p.hashKey)
@@ -116,9 +163,12 @@ func (p *Posting) Add(docid *document.DocumentID, _ *struct{}) error {
 	return p.add(doc)
 }
 
-func (p *Posting) Delete(doc *document.Document, _ *struct{}) error {
-	p.documents++
-	return nil
+func (p *Posting) Delete(docid *document.DocumentID, _ *struct{}) error {
+	doc, err := document.GetDocument(docid, p.registry)
+	if err != nil {
+		return err
+	}
+	return p.remove(doc)
 }
 
 func (p *Posting) Search(doc *document.Document, result *document.SearchResult) error {

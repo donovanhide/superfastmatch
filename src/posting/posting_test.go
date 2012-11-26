@@ -37,6 +37,7 @@ func (s *PostingSuite) TestSimpleAddDocument(c *C) {
 func (s *PostingSuite) TestAddDocumentWithoutClient(c *C) {
 	p := newPosting(s.Registry, "test")
 	p.Init(&s.Registry.PostingConfigs[0], nil)
+	ids := make([]*document.DocumentID, docCount)
 	for i := 0; i < docCount; i++ {
 		id := &document.DocumentID{
 			Doctype: rand.Uint32()%100 + 1,
@@ -46,9 +47,17 @@ func (s *PostingSuite) TestAddDocumentWithoutClient(c *C) {
 		c.Assert(err, IsNil)
 		err = doc.Save(s.Registry)
 		c.Assert(err, IsNil)
-		err = p.Add(&doc.Id, nil)
+		ids[i] = id
+	}
+	for _, id := range ids {
+		err := p.Add(id, nil)
 		c.Assert(err, IsNil)
 	}
+	for _, id := range ids {
+		err := p.Delete(id, nil)
+		c.Assert(err, IsNil)
+	}
+
 }
 
 func (s *PostingSuite) TestAddDocumentViaClient(c *C) {

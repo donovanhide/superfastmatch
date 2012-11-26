@@ -23,7 +23,7 @@ func (item *QueueItem) Execute(registry *registry.Registry, client *posting.Clie
 	if err != nil {
 		item.Status = "Failed"
 		item.Error = err.Error()
-		log.Printf("Failed Queue Item: %v", item)
+		log.Printf("Failed Queue Item: %v Error: %s", item, err.Error())
 	} else {
 		item.Status = "Completed"
 		item.Payload = []byte(nil)
@@ -41,13 +41,10 @@ func AddDocument(item *QueueItem, registry *registry.Registry, client *posting.C
 	if err != nil {
 		return err
 	}
-	err = doc.Save(registry)
-	if err != nil {
+	if err = doc.Save(registry); err != nil {
 		return err
 	}
-	// success := make([]bool, len(registry.PostingClients))
-	err = client.CallMultiple("Posting.Add", &doc.Id)
-	if err != nil {
+	if err = client.CallMultiple("Posting.Add", &doc.Id); err != nil {
 		return err
 	}
 	return nil
@@ -58,10 +55,13 @@ func DeleteDocument(item *QueueItem, registry *registry.Registry, client *postin
 	if err != nil {
 		return err
 	}
-	return doc.Delete(registry)
-	// var success bool
-	// err = doRPC("Posting.Delete", *document, &success, rw)
-
+	if err = client.CallMultiple("Posting.Delete", &doc.Id); err != nil {
+		return err
+	}
+	if err = doc.Delete(registry); err != nil {
+		return err
+	}
+	return nil
 }
 
 func TestCorpus(item *QueueItem, registry *registry.Registry, client *posting.Client) error {
