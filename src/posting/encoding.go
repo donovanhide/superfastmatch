@@ -15,17 +15,20 @@ const maxSize = 255
 const sizeOfZero = 1
 
 type Header struct {
-	doctype  uint32
+	Doctype  uint32
 	existing []byte
 	updated  []byte
 	buf      []uint32
 }
 
+type HeaderList struct {
+	list.List
+}
+
 type PostingLine struct {
-	Length    int
-	count     uint32
-	headers   list.List
-	insertion []byte
+	Length  int
+	count   uint32
+	headers HeaderList
 }
 
 func sizeUVarint32(value uint32) int {
@@ -51,12 +54,37 @@ func putUvarint32(buf []byte, pos int, value uint32) int {
 	return pos + binary.PutUvarint(buf[pos:], uint64(value))
 }
 
+func (h *Header) write(b []byte) int {
+	pos := 0
+	h.Doctype, pos = readUvarint32(b, pos)
+	length, pos := readUvarint32(b, pos)
+	h.existing = b[pos : pos+int(length)]
+	h.updated = h.updated[:0] //Needed?
+	return pos + int(length)
+}
+
+func (h *Header) read(b []byte) int {
+	pos := 0
+	deltas := h.existing
+	if len(h.updated) > 0 { //Get rid!!
+		deltas = h.updated
+	}
+	pos = putUvarint32(b, pos, h.Doctype)
+	pos = putUvarint32(b, pos, uint32(len(deltas)))
+	pos += copy(b[pos:pos+len(deltas)], deltas)
+	return pos
+}
+
 func newHeader() *Header {
 	return &Header{
 		existing: make([]byte, 0, maxSize),
 		updated:  make([]byte, 0, maxSize),
 		buf:      make([]uint32, maxDeltas),
 	}
+}
+
+func (h *Header) String() string {
+	return fmt.Sprintf(" E: %v U: %v ", h.existing, h.updated)
 }
 
 func (h *Header) Docids() []uint32 {
@@ -138,56 +166,43 @@ func (h *Header) insertDocid(docid uint32) (int, bool) {
 	return len(h.updated) + sizeUVarint32(uint32(len(h.updated))) - existing, true
 }
 
-func (p *PostingLine) getHeader(doctype uint32) *list.Element {
-	h := p.headers.Front()
-	header := h.Value.(*Header)
-	for i := uint32(0); i < p.count; i++ {
-		if header.doctype == doctype {
+func (l *HeaderList) get(limit uint32, doctype uint32) *list.Element {
+	for i, h := uint32(0), l.Front(); i < limit; h = h.Next() {
+		i++
+		if h.Value.(*Header).Doctype == doctype {
 			return h
 		}
-		h = h.Next()
-		header = h.Value.(*Header)
 	}
 	return nil
 }
 
-func (p *PostingLine) addHeader(doctype uint32) *Header {
-	h := p.headers.Front()
+// returns header and true if appended or inserted
+func (l *HeaderList) add(limit uint32, doctype uint32) (*Header, bool) {
+	h := l.Front()
 	header := h.Value.(*Header)
-	for i := uint32(0); i < p.count; i++ {
+outer:
+	for i := uint32(0); i < limit; i++ {
 		switch {
-		case header.doctype == doctype:
-			// fmt.Println("Exists", doctype, p.count, p.Length, &header)
-			return header
-		case header.doctype > doctype:
-			header = p.headers.Remove(p.headers.Back()).(*Header)
-			header.doctype = doctype
-			header.existing = nil
-			header.updated = header.updated[:0]
-			p.headers.InsertBefore(header, h)
-			p.count++
-			p.Length += sizeUVarint32(doctype) + sizeOfZero
-			// fmt.Println("Insert", doctype, p.count, p.Length, &header, p.headers.Len())
-			return header
+		case header.Doctype == doctype:
+			return header, false
+		case header.Doctype > doctype:
+			header = l.Remove(l.Back()).(*Header)
+			l.InsertBefore(header, h)
+			break outer //goto evil?
 		}
-		// fmt.Println("Skip", doctype, header.doctype, header.deltas, &header)
 		h = h.Next()
 		header = h.Value.(*Header)
 	}
-	header.doctype = doctype
+	header.Doctype = doctype
 	header.existing = nil
-	header.updated = header.updated[:0]
-	p.Length += sizeUVarint32(doctype) + sizeOfZero
-	p.count++
-	// fmt.Println("Append", doctype, p.count, p.Length, &header)
-	return header
+	return header, true
 }
 
 func (p *PostingLine) RemoveDocumentId(id *document.DocumentID) bool {
 	if p.count == 0 {
 		return false
 	}
-	h := p.getHeader(id.Doctype)
+	h := p.headers.get(p.count, id.Doctype)
 	if h == nil {
 		return false
 	}
@@ -206,7 +221,11 @@ func (p *PostingLine) AddDocumentId(id *document.DocumentID) bool {
 	if p.count >= maxHeaders {
 		return false
 	}
-	h := p.addHeader(id.Doctype)
+	h, added := p.headers.add(p.count, id.Doctype)
+	if added {
+		p.Length += sizeUVarint32(id.Doctype) + sizeOfZero
+		p.count++
+	}
 	diff, changed := h.insertDocid(id.Docid)
 	p.Length += diff
 	return changed
@@ -214,8 +233,7 @@ func (p *PostingLine) AddDocumentId(id *document.DocumentID) bool {
 
 func NewPostingLine() *PostingLine {
 	p := PostingLine{
-		insertion: make([]byte, 2*binary.MaxVarintLen32),
-		Length:    1,
+		Length: 1,
 	}
 	p.headers.Init()
 	for i := 0; i < maxHeaders; i++ {
@@ -235,17 +253,9 @@ func (p *PostingLine) Write(b []byte) (int, error) {
 	if p.count >= maxHeaders {
 		panic(fmt.Sprint("Too many headers:", p.count, p.Length))
 	}
-	deltasLength := uint32(0)
-	header := p.headers.Front()
-	for i := uint32(0); i < p.count; i++ {
-		h := header.Value.(*Header)
-		h.doctype, pos = readUvarint32(b, pos)
-		deltasLength, pos = readUvarint32(b, pos)
-		h.existing = b[pos : pos+int(deltasLength)]
-		h.updated = h.updated[:0]
-		// fmt.Println("Write:", &header, h.existing)
-		pos += int(deltasLength)
-		header = header.Next()
+	for i, h := uint32(0), p.headers.Front(); i < p.count; h = h.Next() {
+		i++
+		pos += h.Value.(*Header).write(b[pos:])
 	}
 	if pos < len(b) {
 		panic("Not enough written")
@@ -259,18 +269,9 @@ func (p *PostingLine) Read(b []byte) (int, error) {
 		panic(fmt.Sprint("Buffer wrong size: ", len(b), p.Length))
 	}
 	pos := putUvarint32(b, 0, p.count)
-	// fmt.Println("During Read:", p.String(true))
-	header := p.headers.Front()
-	for i := uint32(0); i < p.count; i++ {
-		h := header.Value.(*Header)
-		deltas := h.existing
-		if len(h.updated) > 0 {
-			deltas = h.updated
-		}
-		pos = putUvarint32(b, pos, h.doctype)
-		pos = putUvarint32(b, pos, uint32(len(deltas)))
-		pos += copy(b[pos:pos+len(deltas)], deltas)
-		header = header.Next()
+	for i, h := uint32(0), p.headers.Front(); i < p.count; h = h.Next() {
+		i++
+		pos += h.Value.(*Header).read(b[pos:])
 	}
 	return pos, io.EOF
 }
@@ -280,10 +281,10 @@ func (p *PostingLine) FillMap(m *document.SearchMap, pos uint32) {
 		return
 	}
 	i := uint32(0)
-	for h := p.headers.Front(); h != nil && i < p.count; h = h.Next() {
+	for h := p.headers.Front(); i < p.count; h = h.Next() {
 		i++
 		header := h.Value.(*Header)
-		doctype := header.doctype
+		doctype := header.Doctype
 		for _, docid := range header.Docids() {
 			id := document.DocumentID{Doctype: doctype, Docid: docid}
 			if tally, ok := (*m)[id]; ok {
@@ -303,13 +304,13 @@ func (p *PostingLine) FillMap(m *document.SearchMap, pos uint32) {
 func (p *PostingLine) String(debug bool) string {
 	buf := new(bytes.Buffer)
 	i := uint32(0)
-	for h := p.headers.Front(); h != nil && i < p.count; h = h.Next() {
+	for h := p.headers.Front(); i < p.count; h = h.Next() {
 		i++
 		header := h.Value.(*Header)
 		docids := header.Docids()
-		buf.WriteString(fmt.Sprintf("Doctype: %v Length: %v Deltas: %v Docids:%v", header.doctype, len(docids), header.Deltas(), docids))
+		buf.WriteString(fmt.Sprintf("Doctype: %v Length: %v Deltas: %v Docids:%v", header.Doctype, len(docids), header.Deltas(), docids))
 		if debug {
-			buf.WriteString(fmt.Sprintf(" E: %v U: %v ", header.existing, header.updated))
+			buf.WriteString(header.String())
 		}
 		buf.WriteString("\n")
 	}

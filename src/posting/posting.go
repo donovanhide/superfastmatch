@@ -235,7 +235,7 @@ func (p *Posting) List(in Query, out *Query) error {
 		for j, h := 0, l.headers.Front(); h != nil && j < int(l.count); h = h.Next() {
 			header := h.Value.(*Header)
 			doctypes[j] = Doctype{
-				Doctype: header.doctype,
+				Doctype: header.Doctype,
 				Docids:  header.Docids(),
 				Deltas:  header.Deltas(),
 			}
