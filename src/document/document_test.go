@@ -5,15 +5,15 @@ import (
 )
 
 func Test_NormalisedText(t *testing.T) {
-	doc1 := BuildDocument(1, 1, "This is a test", "This is some text,!&")
-	doc2 := BuildDocument(1, 1, "This is a test", "THIS IS SOME TEXT   ")
+	doc1, _ := BuildDocument(1, 1, "This is a test", "This is some text,!&")
+	doc2, _ := BuildDocument(1, 1, "This is a test", "THIS IS SOME TEXT   ")
 	if doc1.NormalisedText() != doc2.NormalisedText() {
 		t.Error("Bad text normalisation")
 	}
 }
 
 func Test_Hashes(t *testing.T) {
-	doc := BuildDocument(1, 1, "This is a test", "Text gobble TEXT")
+	doc, _ := BuildDocument(1, 1, "This is a test", "Text gobble TEXT")
 	key := HashKey{WindowSize: 4, HashWidth: 32}
 	if len(doc.Hashes(key)) != 13 {
 		t.Errorf("Wrong number of hashes: %v", len(doc.Hashes(key)))

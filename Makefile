@@ -1,5 +1,7 @@
 export GOPATH := $(shell pwd)
 
+PKGS=$(notdir $(wildcard src/*))
+
 run:
 	go install -v superfastmatch
 	go build -v -o ./bin/superfastmatch superfastmatch
@@ -28,12 +30,11 @@ benchmark:
 	rm *.test
 
 test:
-	go test -v sparsetable
-	go test -v posting
-	go test -v document
-	go test -v query
-	go test -v queue
-	go test -v registry
+	rm -f test.log
+	mkdir -p data/test/
+	mongo/bin/mongod --fork --logpath=test.log --dbpath=data/test/
+	@$(foreach test,$(PKGS),go test $(test);)
+	mongo/bin/mongo admin --eval "db.shutdownServer()"
 
 dependencies:
 	go get -u launchpad.net/gocheck

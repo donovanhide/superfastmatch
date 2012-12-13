@@ -48,6 +48,16 @@ func (s UInt32Set) Remove(v uint32) bool {
 // Mock up a posting line
 type fakePostings map[uint32]UInt32Set
 
+func encodeDeltas(docids []uint32) []uint32 {
+	deltas := make(UIntSlice, len(docids))
+	previous := uint32(0)
+	for i, d := range docids {
+		deltas[i] = d - previous
+		previous = d
+	}
+	return deltas
+}
+
 func (f fakePostings) String() string {
 	b := new(bytes.Buffer)
 	doctypes := SortedKeys(f)

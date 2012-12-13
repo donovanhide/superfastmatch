@@ -2,6 +2,7 @@ package posting
 
 import (
 	"code.google.com/p/gorilla/schema"
+	"document"
 	"net/rpc"
 	"net/url"
 	"registry"
@@ -10,8 +11,9 @@ import (
 var decoder = schema.NewDecoder()
 
 type Client struct {
-	clients []*rpc.Client
-	configs []registry.PostingConfig
+	clients  []*rpc.Client
+	registry *registry.Registry
+	// configs  []registry.PostingConfig
 }
 
 type Query struct {
@@ -21,6 +23,7 @@ type Query struct {
 }
 
 type ListResult struct {
+	Success   bool   `json:"success"`
 	TotalRows uint64 `json:"totalRows"`
 	Rows      []Row  `json:"rows"`
 }
@@ -39,12 +42,12 @@ type Doctype struct {
 
 func NewClient(registry *registry.Registry) (*Client, error) {
 	p := &Client{
-		configs: registry.PostingConfigs,
+		registry: registry,
 	}
 	p.clients = make([]*rpc.Client, len(registry.PostingConfigs))
 	var err error
-	for i, _ := range p.configs {
-		p.clients[i], err = rpc.Dial("tcp", p.configs[i].Address)
+	for i, config := range p.registry.PostingConfigs {
+		p.clients[i], err = rpc.Dial("tcp", config.Address)
 		if err != nil {
 			return nil, err
 		}
@@ -53,11 +56,11 @@ func NewClient(registry *registry.Registry) (*Client, error) {
 }
 
 func (p *Client) Initialise() error {
-	done := make(chan *rpc.Call, len(p.configs))
-	for i, _ := range p.configs {
-		p.clients[i].Go("Posting.Init", p.configs[i], nil, done)
+	done := make(chan *rpc.Call, len(p.registry.PostingConfigs))
+	for i, config := range p.registry.PostingConfigs {
+		p.clients[i].Go("Posting.Init", config, nil, done)
 	}
-	for _, _ = range p.configs {
+	for _, _ = range p.registry.PostingConfigs {
 		replyCall := <-done
 		if replyCall.Error != nil {
 			return replyCall.Error
@@ -72,13 +75,28 @@ func (p *Client) Close() {
 	}
 }
 
+func (p *Client) Search(d *DocumentArg) (*document.SearchResult, error) {
+	result := make(document.SearchGroup, len(p.clients))
+	done := make(chan *rpc.Call, len(p.clients))
+	for i, _ := range p.clients {
+		p.clients[i].Go("Posting.Search", d, &result[i], done)
+	}
+	for _, _ = range p.clients {
+		replyCall := <-done
+		if replyCall.Error != nil {
+			return nil, replyCall.Error
+		}
+	}
+	return result.GetResult(p.registry), nil
+}
+
 // Don't care about the replies, just check the error
 func (p *Client) CallMultiple(service string, args interface{}) error {
 	done := make(chan *rpc.Call, len(p.clients))
 	for i, _ := range p.clients {
 		p.clients[i].Go(service, args, nil, done)
 	}
-	for _, _ = range p.configs {
+	for _, _ = range p.clients {
 		replyCall := <-done
 		if replyCall.Error != nil {
 			return replyCall.Error

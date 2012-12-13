@@ -11,6 +11,18 @@ import (
 	"time"
 )
 
+type DocumentArg struct {
+	Id   *document.DocumentID
+	Text string
+}
+
+func (a *DocumentArg) GetDocument(registry *registry.Registry) (*document.Document, error) {
+	if a.Id != nil {
+		return document.GetDocument(a.Id, registry)
+	}
+	return document.BuildDocument(0, 0, "", a.Text)
+}
+
 type Posting struct {
 	logger      *log.Logger
 	initialised bool
@@ -53,7 +65,7 @@ func (p *Posting) remove(doc *document.Document) error {
 				case serr.Full:
 					saturated++
 				case serr.ShortRead:
-					p.logger.Printf("Short Read for Document: %v Length: %v\n%v", doc.Id.String(), l.Length, l.String())
+					p.logger.Printf("Short Read for Document: %v Length: %v\n%v", doc.Id.String(), l.Length, l.String(true))
 				default:
 					return err
 				}
@@ -72,7 +84,7 @@ func (p *Posting) remove(doc *document.Document) error {
 		(float64(saturated)/float64(set))*100,
 		(float64(dupes)/float64(set))*100,
 		float64(set)/time.Now().Sub(start).Seconds())
-	p.documents++
+	p.documents--
 	return nil
 }
 
@@ -100,7 +112,7 @@ func (p *Posting) add(doc *document.Document) error {
 				case serr.Full:
 					saturated++
 				case serr.ShortRead:
-					p.logger.Printf("Short Read for Document: %v Length: %v\n%v", doc.Id.String(), l.Length, l.String())
+					p.logger.Printf("Short Read for Document: %v Length: %v\n%v", doc.Id.String(), l.Length, l.String(true))
 				default:
 					return err
 				}
@@ -123,6 +135,32 @@ func (p *Posting) add(doc *document.Document) error {
 	return nil
 }
 
+func (p *Posting) search(doc *document.Document, results *document.SearchMap) error {
+	start := time.Now()
+	*results = make(document.SearchMap)
+	hashes := doc.Hashes(p.hashKey)
+	count := 0
+	l := NewPostingLine()
+	for i, hash := range hashes {
+		pos := hash - p.offset
+		if pos >= p.size {
+			continue
+		}
+		count++
+		if err := p.table.Get(pos, l); err != nil {
+			return err
+		}
+		l.FillMap(results, uint32(i))
+	}
+	p.logger.Printf("Searched Document: %v Hashes: %v/%v Ignored: %.2f%% Speed: %.0f hashes/sec",
+		doc.Id.String(),
+		count,
+		len(hashes),
+		(float64(1)-(float64(count)/float64(len(hashes))))*100,
+		float64(count)/time.Now().Sub(start).Seconds())
+	return nil
+}
+
 func (p *Posting) Init(conf *registry.PostingConfig, reply *bool) error {
 	p.initialised = false
 	p.table = sparsetable.Init(conf.Size, conf.GroupSize)
@@ -138,13 +176,9 @@ func (p *Posting) Init(conf *registry.PostingConfig, reply *bool) error {
 		return err
 	}
 	p.logger.Printf("Loading %v documents", len(docids))
-	for _, docid := range docids {
-		doc, err := document.GetDocument(&docid, p.registry)
-		if err != nil {
-			return err
-		}
-		err = p.add(doc)
-		if err != nil {
+	c := document.GetDocuments(docids, p.registry)
+	for doc := range c {
+		if err = p.add(doc); err != nil {
 			return err
 		}
 	}
@@ -155,24 +189,28 @@ func (p *Posting) Init(conf *registry.PostingConfig, reply *bool) error {
 	return nil
 }
 
-func (p *Posting) Add(docid *document.DocumentID, _ *struct{}) error {
-	doc, err := document.GetDocument(docid, p.registry)
+func (p *Posting) Add(arg *DocumentArg, _ *struct{}) error {
+	doc, err := arg.GetDocument(p.registry)
 	if err != nil {
 		return err
 	}
 	return p.add(doc)
 }
 
-func (p *Posting) Delete(docid *document.DocumentID, _ *struct{}) error {
-	doc, err := document.GetDocument(docid, p.registry)
+func (p *Posting) Delete(arg *DocumentArg, _ *struct{}) error {
+	doc, err := arg.GetDocument(p.registry)
 	if err != nil {
 		return err
 	}
 	return p.remove(doc)
 }
 
-func (p *Posting) Search(doc *document.Document, result *document.SearchResult) error {
-	return nil
+func (p *Posting) Search(arg *DocumentArg, result *document.SearchMap) error {
+	doc, err := arg.GetDocument(p.registry)
+	if err != nil {
+		return err
+	}
+	return p.search(doc, result)
 }
 
 func (p *Posting) List(in Query, out *Query) error {

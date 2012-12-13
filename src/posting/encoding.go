@@ -18,6 +18,7 @@ type Header struct {
 	doctype  uint32
 	existing []byte
 	updated  []byte
+	buf      []uint32
 }
 
 type PostingLine struct {
@@ -50,36 +51,30 @@ func putUvarint32(buf []byte, pos int, value uint32) int {
 	return pos + binary.PutUvarint(buf[pos:], uint64(value))
 }
 
-func decodeDeltas(deltas []byte) []uint32 {
-	length := len(deltas)
-	decoded := make([]uint32, length)
-	i := 0
-	for pos := 0; pos < length; i++ {
-		decoded[i], pos = readUvarint32(deltas, pos)
+func newHeader() *Header {
+	return &Header{
+		existing: nil,
+		updated:  make([]byte, 0, maxSize),
+		buf:      make([]uint32, maxDeltas),
 	}
-	return decoded[:i]
 }
 
-func encodeDeltas(docids []uint32) []uint32 {
-	deltas := make(UIntSlice, len(docids))
-	previous := uint32(0)
-	for i, d := range docids {
-		deltas[i] = d - previous
-		previous = d
-	}
-	return deltas
-}
-
-func decodeDocids(deltas []byte) []uint32 {
-	length := len(deltas)
-	decoded := make([]uint32, length)
+func (h *Header) Docids() []uint32 {
 	current, delta, i := uint32(0), uint32(0), 0
-	for pos := 0; pos < length; i++ {
-		delta, pos = readUvarint32(deltas, pos)
+	for pos, length := 0, len(h.existing); pos < length; i++ {
+		delta, pos = readUvarint32(h.existing, pos)
 		current += delta
-		decoded[i] = current
+		h.buf[i] = current
 	}
-	return decoded[:i]
+	return h.buf[:i]
+}
+
+func (h *Header) Deltas() []uint32 {
+	i := 0
+	for pos, length := 0, len(h.existing); pos < length; i++ {
+		h.buf[i], pos = readUvarint32(h.existing, pos)
+	}
+	return h.buf[:i]
 }
 
 func removeDocid(docid uint32, in []byte, out []byte) ([]byte, bool) {
@@ -217,13 +212,13 @@ func (p *PostingLine) AddDocumentId(id *document.DocumentID) bool {
 	if p.count >= maxHeaders {
 		return false
 	}
-	// fmt.Println("Headers Before: ", p.DumpHeaders())
+	// fmt.Println("Headers Before: ", p.String(true))
 	h := p.addHeader(id.Doctype)
 	h.updated = insertDocid(id.Docid, h.existing, h.updated)
 	if len(h.updated) == 0 {
 		return false
 	}
-	// fmt.Println("Headers After: ", p.DumpHeaders())
+	// fmt.Println("Headers After: ", p.String(true))
 	p.Length -= len(h.existing) + sizeUVarint32(uint32(len(h.existing)))
 	p.Length += len(h.updated) + sizeUVarint32(uint32(len(h.updated)))
 	return true
@@ -236,11 +231,7 @@ func NewPostingLine() *PostingLine {
 	}
 	p.headers.Init()
 	for i := 0; i < maxHeaders; i++ {
-		header := &Header{
-			existing: nil,
-			updated:  make([]byte, 0, maxSize),
-		}
-		p.headers.PushBack(header)
+		p.headers.PushBack(newHeader())
 	}
 	return &p
 }
@@ -280,7 +271,7 @@ func (p *PostingLine) Read(b []byte) (int, error) {
 		panic(fmt.Sprint("Buffer wrong size: ", len(b), p.Length))
 	}
 	pos := putUvarint32(b, 0, p.count)
-	// fmt.Println("During Read:", p.DumpHeaders())
+	// fmt.Println("During Read:", p.String(true))
 	header := p.headers.Front()
 	for i := uint32(0); i < p.count; i++ {
 		h := header.Value.(*Header)
@@ -296,33 +287,43 @@ func (p *PostingLine) Read(b []byte) (int, error) {
 	return pos, io.EOF
 }
 
-func (h *Header) Docids() []uint32 {
-	return decodeDocids(h.existing)
+func (p *PostingLine) FillMap(m *document.SearchMap, pos uint32) {
+	if p.count == 0 {
+		return
+	}
+	i := uint32(0)
+	for h := p.headers.Front(); h != nil && i < p.count; h = h.Next() {
+		i++
+		header := h.Value.(*Header)
+		doctype := header.doctype
+		for _, docid := range header.Docids() {
+			id := document.DocumentID{Doctype: doctype, Docid: docid}
+			if tally, ok := (*m)[id]; ok {
+				// MAGIC NUMBER ALERT!!!!!
+				if pos-tally.Last < 128 {
+					tally.SumDeltas += uint64(pos - tally.Last)
+					tally.Last = pos
+					tally.Count++
+				}
+			} else {
+				(*m)[id] = &document.Tally{SumDeltas: 0, Last: pos, Count: 1}
+			}
+		}
+	}
 }
 
-func (h *Header) Deltas() []uint32 {
-	return decodeDeltas(h.existing)
-}
-
-func (p *PostingLine) String() string {
+func (p *PostingLine) String(debug bool) string {
 	buf := new(bytes.Buffer)
 	i := uint32(0)
 	for h := p.headers.Front(); h != nil && i < p.count; h = h.Next() {
 		i++
 		header := h.Value.(*Header)
 		docids := header.Docids()
-		buf.WriteString(fmt.Sprintf("Doctype: %v Length: %v Deltas: %v Docids:%v\n", header.doctype, len(docids), header.Deltas(), docids))
-	}
-	return buf.String()
-}
-
-func (p *PostingLine) DumpHeaders() string {
-	buf := new(bytes.Buffer)
-	i := uint32(0)
-	for h := p.headers.Front(); h != nil && i < p.count; h = h.Next() {
-		i++
-		header := h.Value.(*Header)
-		buf.WriteString(fmt.Sprintf("Doctype: %v E: %v U: %v ", header.doctype, header.existing, header.updated))
+		buf.WriteString(fmt.Sprintf("Doctype: %v Length: %v Deltas: %v Docids:%v", header.doctype, len(docids), header.Deltas(), docids))
+		if debug {
+			buf.WriteString(fmt.Sprintf(" E: %v U: %v ", header.existing, header.updated))
+		}
+		buf.WriteString("\n")
 	}
 	return buf.String()
 }

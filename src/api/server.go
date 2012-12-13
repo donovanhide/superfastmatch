@@ -86,6 +86,17 @@ func indexHandler(rw http.ResponseWriter, req *http.Request) *appError {
 	return writeJson(rw, req, rows, 200)
 }
 
+func searchHandler(rw http.ResponseWriter, req *http.Request) *appError {
+	fillValues(req)
+	search := &posting.DocumentArg{Text: req.Form.Get("text")}
+	rows, err := c.Search(search)
+	if err != nil {
+		return &appError{err, "Search problem", 500}
+	}
+	return writeJson(rw, req, rows, 200)
+	return nil
+}
+
 func Serve(registry *registry.Registry) {
 	r = registry
 	var err error
@@ -100,6 +111,7 @@ func Serve(registry *registry.Registry) {
 	router.Handle("/document/{doctypes:(((\\d+-\\d+):?|(\\d+):?))+}/", appHandler(documentsHandler)).Methods("GET", "DELETE")
 	router.Handle("/document/{doctype:[0-9]+}/{docid:[0-9]+}/", appHandler(documentHandler)).Methods("GET", "POST", "DELETE")
 	router.Handle("/index/", appHandler(indexHandler)).Methods("GET")
+	router.Handle("/search/", appHandler(searchHandler)).Methods("POST")
 	log.Println("Starting API server on:", registry.ApiListener.Addr().String())
 	registry.Routines.Add(1)
 	http.Serve(registry.ApiListener, router)

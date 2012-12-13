@@ -22,21 +22,19 @@ func (s *PostingSuite) TestSimpleAddDocument(c *C) {
 	text := document.RandomWords(120)
 	p := newPosting(s.Registry, "test")
 	p.Init(&s.Registry.PostingConfigs[0], nil)
-	doc1 := document.BuildDocument(1, 2, "Document 1", text)
+	doc1, _ := document.BuildDocument(1, 2, "Document 1", text)
 	err := doc1.Save(s.Registry)
 	c.Assert(err, IsNil)
-	err = p.Add(&doc1.Id, nil)
+	err = p.Add(&DocumentArg{Id: &doc1.Id}, nil)
 	c.Assert(err, IsNil)
-	doc2 := document.BuildDocument(1, 7, "Document 2", text)
+	doc2, _ := document.BuildDocument(1, 7, "Document 2", text)
 	err = doc2.Save(s.Registry)
 	c.Assert(err, IsNil)
-	err = p.Add(&doc2.Id, nil)
+	err = p.Add(&DocumentArg{Id: &doc2.Id}, nil)
 	c.Assert(err, IsNil)
 }
 
-func (s *PostingSuite) TestAddDocumentWithoutClient(c *C) {
-	p := newPosting(s.Registry, "test")
-	p.Init(&s.Registry.PostingConfigs[0], nil)
+func buildDocuments(s *PostingSuite, c *C) []*document.DocumentID {
 	ids := make([]*document.DocumentID, docCount)
 	for i := 0; i < docCount; i++ {
 		id := &document.DocumentID{
@@ -49,15 +47,21 @@ func (s *PostingSuite) TestAddDocumentWithoutClient(c *C) {
 		c.Assert(err, IsNil)
 		ids[i] = id
 	}
-	for _, id := range ids {
-		err := p.Add(id, nil)
-		c.Assert(err, IsNil)
-	}
-	for _, id := range ids {
-		err := p.Delete(id, nil)
-		c.Assert(err, IsNil)
-	}
+	return ids
+}
 
+func (s *PostingSuite) TestAddDocumentWithoutClient(c *C) {
+	p := newPosting(s.Registry, "test")
+	p.Init(&s.Registry.PostingConfigs[0], nil)
+	ids := buildDocuments(s, c)
+	for _, id := range ids {
+		err := p.Add(&DocumentArg{Id: id}, nil)
+		c.Assert(err, IsNil)
+	}
+	for _, id := range ids {
+		err := p.Delete(&DocumentArg{Id: id}, nil)
+		c.Assert(err, IsNil)
+	}
 }
 
 func (s *PostingSuite) TestAddDocumentViaClient(c *C) {
@@ -65,16 +69,29 @@ func (s *PostingSuite) TestAddDocumentViaClient(c *C) {
 	client, err := NewClient(s.Registry)
 	client.Initialise()
 	c.Check(err, IsNil)
-	for i := 0; i < docCount; i++ {
-		id := &document.DocumentID{
-			Doctype: rand.Uint32()%100 + 1,
-			Docid:   rand.Uint32()%500 + 1,
-		}
-		doc, err := document.NewTestDocument(id, 100000)
-		c.Assert(err, IsNil)
-		err = doc.Save(s.Registry)
-		c.Assert(err, IsNil)
-		err = client.CallMultiple("Posting.Add", &doc.Id)
+	ids := buildDocuments(s, c)
+	for _, id := range ids {
+		err = client.CallMultiple("Posting.Add", &DocumentArg{Id: id})
 		c.Assert(err, IsNil)
 	}
+	for _, id := range ids {
+		err = client.CallMultiple("Posting.Delete", &DocumentArg{Id: id})
+		c.Assert(err, IsNil)
+	}
+	client.Close()
+}
+
+func (s *PostingSuite) TestTemporarySearch(c *C) {
+	go Serve(s.Registry)
+	client, err := NewClient(s.Registry)
+	client.Initialise()
+	ids := buildDocuments(s, c)
+	for _, id := range ids {
+		err = client.CallMultiple("Posting.Add", &DocumentArg{Id: id})
+		c.Assert(err, IsNil)
+	}
+	tempSearch := &DocumentArg{Text: document.RandomWords(10000)}
+	_, err = client.Search(tempSearch)
+	// c.Check(len(results.), Equals, 0)
+	c.Assert(err, IsNil)
 }

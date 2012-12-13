@@ -8,7 +8,7 @@ import (
 	"unicode/utf8"
 )
 
-var testFiles = []string{"../testdata/pg10.txt.gz", "../testdata/pg1581.txt.gz"}
+var testFiles = []string{"../../fixtures/pg10.txt.gz", "../../fixtures/pg1581.txt.gz"}
 var fileCache = make(map[string]string)
 
 func openFile(path string) string {

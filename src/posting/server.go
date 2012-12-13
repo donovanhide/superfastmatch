@@ -5,7 +5,7 @@ import (
 	"net"
 	"net/rpc"
 	"registry"
-	"strings"
+	// "strings"
 )
 
 func serve(registry *registry.Registry, l *net.Listener) {
@@ -16,11 +16,8 @@ func serve(registry *registry.Registry, l *net.Listener) {
 	registry.Routines.Add(1)
 	for {
 		conn, err := (*l).Accept()
-		if err != nil && strings.HasSuffix(err.Error(), "use of closed network connection") {
-			break
-		}
 		if err != nil {
-			log.Fatalf(err.Error())
+			break
 		}
 		go server.ServeConn(conn)
 	}

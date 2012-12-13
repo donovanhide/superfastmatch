@@ -32,11 +32,6 @@ type Document struct {
 	normalisedText string
 }
 
-type SearchResult struct {
-	Id      DocumentID
-	results map[DocumentID][]uint32
-}
-
 var words []string
 
 func (k *HashKey) String() string {
@@ -70,13 +65,13 @@ func (d *DocumentID) String() string {
 	return fmt.Sprintf("(%v,%v)", d.Doctype, d.Docid)
 }
 
-func BuildDocument(doctype uint32, docid uint32, title string, text string) *Document {
+func BuildDocument(doctype uint32, docid uint32, title string, text string) (*Document, error) {
 	return &Document{
 		Id:     DocumentID{Doctype: doctype, Docid: docid},
 		Title:  title,
 		Text:   text,
 		Length: uint64(utf8.RuneCountInString(text)),
-	}
+	}, nil
 }
 
 func NewDocument(id *DocumentID, values *url.Values) (*Document, error) {
@@ -108,6 +103,19 @@ func GetDocument(id *DocumentID, registry *registry.Registry) (*Document, error)
 		return nil, err
 	}
 	return &document, nil
+}
+
+func GetDocuments(ids []DocumentID, registry *registry.Registry) chan *Document {
+	c := make(chan *Document, 20)
+	go func() {
+		for _, id := range ids {
+			if doc, err := GetDocument(&id, registry); err == nil {
+				c <- doc
+			}
+		}
+		close(c)
+	}()
+	return c
 }
 
 func (document *Document) Save(registry *registry.Registry) error {
