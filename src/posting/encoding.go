@@ -53,7 +53,7 @@ func putUvarint32(buf []byte, pos int, value uint32) int {
 
 func newHeader() *Header {
 	return &Header{
-		existing: nil,
+		existing: make([]byte, 0, maxSize),
 		updated:  make([]byte, 0, maxSize),
 		buf:      make([]uint32, maxDeltas),
 	}
@@ -77,66 +77,65 @@ func (h *Header) Deltas() []uint32 {
 	return h.buf[:i]
 }
 
-func removeDocid(docid uint32, in []byte, out []byte) ([]byte, bool) {
-	if len(in) == 0 {
-		// fmt.Println("Empty:", docid, in, out[:0])
-		return out[:0], false
+// Returns difference in length,count and true if a change has occurred
+func (h *Header) removeDocid(docid uint32) (int, int, bool) {
+	if len(h.existing) == 0 {
+		return 0, 0, false
 	}
-	length := len(in)
-	previous, current := uint32(0), uint32(0)
-	out = out[:length]
+	previous, current, length := uint32(0), uint32(0), len(h.existing)
+	h.updated = h.updated[:length]
 	for pos := 0; pos < length; {
-		delta, currentPos := readUvarint32(in, pos)
+		delta, currentPos := readUvarint32(h.existing, pos)
 		current += delta
 		if current == docid {
-			pos = copy(out, in[:pos])
-			v, nextPos := readUvarint32(in, currentPos)
+			pos = copy(h.updated, h.existing[:pos])
+			v, nextPos := readUvarint32(h.existing, currentPos)
 			next := current + v
 			if next > current {
-				pos = putUvarint32(out, pos, next-previous)
-				pos += copy(out[pos:], in[nextPos:])
+				pos = putUvarint32(h.updated, pos, next-previous)
+				pos += copy(h.updated[pos:], h.existing[nextPos:])
 			}
-			// fmt.Println("Found:", docid, in, out[:pos])
-			return out[:pos], true
+			h.updated = h.updated[:pos]
+			return len(h.updated) - len(h.existing), len(h.updated), true
 		}
 		previous = current
 		pos = currentPos
 	}
-	copy(out, in)
-	// fmt.Println("Not Found:", docid, in, out)
-	return out, false
+	h.updated = h.updated[:0]
+	return 0, len(h.existing), false
 }
 
-func insertDocid(docid uint32, in []byte, out []byte) []byte {
-	if len(in) >= maxSize {
-		return out[:0]
+// Returns difference in length and true if a change has occurred
+func (h *Header) insertDocid(docid uint32) (int, bool) {
+	if len(h.existing) >= maxSize {
+		return 0, false
 	}
-	out = out[:maxSize]
-	previous, current := uint32(0), uint32(0)
-	length := len(in)
+	existing := len(h.existing) + sizeUVarint32(uint32(len(h.existing)))
+	h.updated = h.updated[:maxSize]
+	previous, current, length := uint32(0), uint32(0), len(h.existing)
 	for pos := 0; pos < length; {
-		delta, currentPos := readUvarint32(in, pos)
+		delta, currentPos := readUvarint32(h.existing, pos)
 		current += delta
 		switch {
 		case current > docid:
-			pos = copy(out, in[:pos])
-			_, nextPos := readUvarint32(in, pos)
-			pos = putUvarint32(out, pos, docid-previous)
-			pos = putUvarint32(out, pos, current-docid)
-			pos += copy(out[pos:], in[nextPos:])
-			// fmt.Println("Insert DocID:", docid, in, out[:pos])
-			return out[:pos]
+			pos = copy(h.updated, h.existing[:pos])
+			_, nextPos := readUvarint32(h.existing, pos)
+			pos = putUvarint32(h.updated, pos, docid-previous)
+			pos = putUvarint32(h.updated, pos, current-docid)
+			pos += copy(h.updated[pos:], h.existing[nextPos:])
+			h.updated = h.updated[:pos]
+			return len(h.updated) + sizeUVarint32(uint32(len(h.updated))) - existing, true
 		case current == docid:
-			// fmt.Println("Exists DocID:", docid, in, out[:0])
-			return out[:0]
+			h.updated = h.updated[:0]
+			return 0, false
 		}
 		previous = current
 		pos = currentPos
 	}
-	pos := copy(out, in)
-	pos = putUvarint32(out, pos, docid-previous)
-	// fmt.Println("Append DocID:", docid, in, out[:pos])
-	return out[:pos]
+	pos := copy(h.updated, h.existing)
+	pos = putUvarint32(h.updated, pos, docid-previous)
+	h.updated = h.updated[:pos]
+	return len(h.updated) + sizeUVarint32(uint32(len(h.updated))) - existing, true
 }
 
 func (p *PostingLine) getHeader(doctype uint32) *list.Element {
@@ -193,35 +192,24 @@ func (p *PostingLine) RemoveDocumentId(id *document.DocumentID) bool {
 		return false
 	}
 	header := h.Value.(*Header)
-	changed := true
-	header.updated, changed = removeDocid(id.Docid, header.existing, header.updated)
-	if !changed {
-		return false
-	}
-	p.Length -= len(header.existing)
-	p.Length += len(header.updated)
-	if len(header.updated) == 0 {
+	diff, count, changed := header.removeDocid(id.Docid)
+	p.Length += diff
+	if count == 0 {
 		p.count--
 		p.Length -= sizeUVarint32(id.Doctype) + sizeOfZero
 		p.headers.MoveToBack(h)
 	}
-	return true
+	return changed
 }
 
 func (p *PostingLine) AddDocumentId(id *document.DocumentID) bool {
 	if p.count >= maxHeaders {
 		return false
 	}
-	// fmt.Println("Headers Before: ", p.String(true))
 	h := p.addHeader(id.Doctype)
-	h.updated = insertDocid(id.Docid, h.existing, h.updated)
-	if len(h.updated) == 0 {
-		return false
-	}
-	// fmt.Println("Headers After: ", p.String(true))
-	p.Length -= len(h.existing) + sizeUVarint32(uint32(len(h.existing)))
-	p.Length += len(h.updated) + sizeUVarint32(uint32(len(h.updated)))
-	return true
+	diff, changed := h.insertDocid(id.Docid)
+	p.Length += diff
+	return changed
 }
 
 func NewPostingLine() *PostingLine {

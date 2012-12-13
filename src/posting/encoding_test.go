@@ -54,64 +54,30 @@ func (s *PostingSuite) TestLineLengthSpecficExample(c *C) {
 }
 
 func (s *PostingSuite) TestInsertRemoveDocid(c *C) {
-	// header := newHeader()
-	// maxLine := 255
-	// docids := make(UInt32Set)
-	// for i := 0; i <= 10000; i++ {
-	// 	docid := rand.Uint32()%1000 + 1
-	// 	header.insertDocid(docid)
-	// 	if len(header.updated) > 0 {
-	// 		deltas = deltas[:len(buf)]
-	// 		copy(deltas, buf)
-	// 		c.Assert(docids.Add(docid), Equals, true)
-	// 	}
-	// 	// c.Assert(len(buf) > 0, Equals, docids.Add(docid))
-	// 	if len(deltas) >= maxLine {
-	// 		break
-	// 	}
-	// 	c.Check(decodeDocids(deltas), DeepEquals, SortedKeys(docids))
-	// }
-	// changed := true
-	// for i := 0; i <= 10000; i++ {
-	// 	docid := rand.Uint32()%1000 + 1
-	// 	buf, changed = removeDocid(docid, deltas, buf)
-	// 	if changed {
-	// 		deltas = deltas[:len(buf)]
-	// 		copy(deltas, buf)
-	// 		c.Assert(docids.Remove(docid), Equals, true)
-	// 	}
-	// 	c.Check(decodeDocids(deltas), DeepEquals, SortedKeys(docids))
-	// }
-
-	// maxLine := 255
-	// docids := make(UInt32Set)
-	// deltas := make([]byte, 0, maxLine)
-	// buf := make([]byte, 0, maxLine)
-	// for i := 0; i <= 10000; i++ {
-	// 	docid := rand.Uint32()%1000 + 1
-	// 	buf = insertDocid(docid, deltas, buf)
-	// 	if len(buf) > 0 {
-	// 		deltas = deltas[:len(buf)]
-	// 		copy(deltas, buf)
-	// 		c.Assert(docids.Add(docid), Equals, true)
-	// 	}
-	// 	// c.Assert(len(buf) > 0, Equals, docids.Add(docid))
-	// 	if len(deltas) >= maxLine {
-	// 		break
-	// 	}
-	// 	c.Check(decodeDocids(deltas), DeepEquals, SortedKeys(docids))
-	// }
-	// changed := true
-	// for i := 0; i <= 10000; i++ {
-	// 	docid := rand.Uint32()%1000 + 1
-	// 	buf, changed = removeDocid(docid, deltas, buf)
-	// 	if changed {
-	// 		deltas = deltas[:len(buf)]
-	// 		copy(deltas, buf)
-	// 		c.Assert(docids.Remove(docid), Equals, true)
-	// 	}
-	// 	c.Check(decodeDocids(deltas), DeepEquals, SortedKeys(docids))
-	// }
+	h := newHeader()
+	maxLine := 255
+	docids := make(UInt32Set)
+	for i := 0; i <= 10000; i++ {
+		docid := rand.Uint32()%1000 + 1
+		_, changed := h.insertDocid(docid)
+		if changed {
+			h.existing, h.updated = h.updated, h.existing
+		}
+		c.Assert(changed, Equals, docids.Add(docid))
+		c.Check(h.Docids(), DeepEquals, SortedKeys(docids))
+		if len(h.existing) >= maxLine {
+			break
+		}
+	}
+	for i := 0; i <= 10000; i++ {
+		docid := rand.Uint32()%1000 + 1
+		_, _, changed := h.removeDocid(docid)
+		if changed {
+			h.existing, h.updated = h.updated, h.existing
+		}
+		c.Assert(changed, Equals, docids.Remove(docid))
+		c.Check(h.Docids(), DeepEquals, SortedKeys(docids))
+	}
 }
 
 func (s *PostingSuite) BenchmarkPostingLine(c *C) {
