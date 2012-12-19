@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"container/list"
 	"document"
-	"encoding/binary"
 	"fmt"
 	"io"
 )
@@ -33,25 +32,40 @@ type PostingLine struct {
 
 func sizeUVarint32(value uint32) int {
 	switch {
-	case value < 128:
+	case value < 0x80:
 		return 1
-	case value < 16384:
+	case value < 0x4000:
 		return 2
-	case value < 2097152:
+	case value < 0x200000:
 		return 3
-	case value < 268435456:
+	case value < 0x10000000:
 		return 4
 	}
 	return 5
 }
 
+// Assumes stream is correctly encoded
 func readUvarint32(buf []byte, pos int) (uint32, int) {
-	value, offset := binary.Uvarint(buf[pos:])
-	return uint32(value), pos + offset
+	var x uint64
+	var s uint
+	for i, b := range buf[pos:] {
+		if b < 0x80 {
+			return uint32(x | uint64(b)<<s), pos + i + 1
+		}
+		x |= uint64(b&0x7f) << s
+		s += 7
+	}
+	return 0, pos
 }
 
 func putUvarint32(buf []byte, pos int, value uint32) int {
-	return pos + binary.PutUvarint(buf[pos:], uint64(value))
+	for value >= 0x80 {
+		buf[pos] = byte(value) | 0x80
+		value >>= 7
+		pos++
+	}
+	buf[pos] = byte(value)
+	return pos + 1
 }
 
 func (h *Header) write(b []byte) int {
