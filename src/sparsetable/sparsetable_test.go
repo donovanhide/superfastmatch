@@ -7,75 +7,84 @@ import (
 	"testing"
 )
 
-const width uint64 = 1 << 24
+const width uint64 = 1 << 16
 const length int32 = 255
 const randLength int32 = 1 << 16
-const groupSize uint64 = 48
+const groupSize uint64 = 128
 
-func Test_SparseTableStress(t *testing.T) {
-	A := Init(width, groupSize)
+func buildData(count int) ([]byte, [][]int) {
 	R := make([]byte, randLength)
-	fake := make(map[uint64][]byte)
-	count := 1000000
+	L := make([][]int, count)
 	for i := int32(0); i < randLength; i++ {
 		R[i] = byte(rand.Int31n(length))
 	}
 	for i := 0; i < count; i++ {
-		start := rand.Int31n(randLength - length)
-		l := rand.Int31n(length) + 1
-		index := uint64(rand.Int63n(int64(width)))
-		data := R[start : start+l]
+		L[i] = make([]int, 3)
+		L[i][0] = rand.Intn(int(width))
+		L[i][1] = rand.Intn(int(randLength - length))
+		L[i][2] = L[i][1] + rand.Intn(int(length))
+	}
+	return R, L
+}
+
+func Test_SparseTableStress(t *testing.T) {
+	A := Init(width, groupSize)
+	fake := make(map[uint64][]byte)
+	count := 1000000
+	R, L := buildData(count)
+	for i := 0; i < count; i++ {
+		v := &L[i]
+		index := uint64((*v)[0])
+		data := R[(*v)[1]:(*v)[2]]
 		err := A.SetBytes(index, data)
 		if len(data) > 255 && err == nil {
 			t.Fatalf("Expected Value greater than 255 bytes")
 		}
+		if err != nil {
+			t.Fatal(err)
+		}
 		if err == nil {
-			fake[index] = data
+			if len(data) == 0 {
+				delete(fake, index)
+			} else {
+				fake[index] = data
+			}
 		}
 	}
 	for i, d := range fake {
 		data, err := A.GetBytes(i)
 		if err != nil {
-			fmt.Println(data, d)
-			t.Fail()
+			t.Error(data, d)
 		}
 		for j, _ := range data {
 			if data[j] != d[j] {
-				fmt.Println(data, d)
-				t.Fail()
+				t.Error(data, d)
 			}
 		}
 	}
-	if A.Count() != uint64(len(fake)) {
-		t.Fail()
+	c := A.Count()
+	if c != uint64(len(fake)) {
+		t.Error(c, len(fake))
 	}
 }
 
 func BenchmarkSparseTable(b *testing.B) {
 	A := Init(width, groupSize)
-	R := make([]byte, randLength)
-	for i := int32(0); i < randLength; i++ {
-		R[i] = byte(rand.Int31n(length))
-	}
+	R, L := buildData(b.N)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		start := rand.Int31n(randLength - length)
-		l := rand.Int31n(length)
-		A.SetBytes(uint64(rand.Int63n(int64(width))), R[start:start+l])
+		v := &L[i]
+		A.SetBytes(uint64((*v)[0]), R[(*v)[1]:(*v)[2]])
 	}
 }
 
 func BenchmarkMap(b *testing.B) {
 	A := make(map[uint64][]byte)
-	R := make([]byte, randLength)
-	for i := int32(0); i < randLength; i++ {
-		R[i] = byte(rand.Int31n(length))
-	}
+	R, L := buildData(b.N)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		start := rand.Int31n(randLength - length)
-		l := rand.Int31n(length)
-		A[uint64(rand.Int63n(int64(width)))] = R[start : start+l]
+		v := &L[i]
+		A[uint64((*v)[0])] = R[(*v)[1]:(*v)[2]]
 	}
 }
 

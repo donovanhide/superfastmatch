@@ -9,6 +9,8 @@ import (
 	"unsafe"
 )
 
+func FastSumUint8(x []uint8) uint64
+
 const MAX_SIZE = 255
 
 type Error struct {
@@ -53,11 +55,7 @@ func Init(size uint64, groupSize uint64) *SparseTable {
 
 func (s *SparseTable) getOffsets(pos uint64) (uint64, uint64, uint64) {
 	group := pos / s.groupSize
-	start := uint64(0)
-	section := s.lengths[group*s.groupSize : pos]
-	for i := range section {
-		start += uint64(section[i])
-	}
+	start := FastSumUint8(s.lengths[group*s.groupSize : pos])
 	end := start + uint64(s.lengths[pos])
 	return group, start, end
 }
@@ -74,13 +72,32 @@ func (s *SparseTable) Set(pos uint64, r io.Reader, length int) error {
 	if length >= MAX_SIZE {
 		return &Error{pos: pos, Full: true}
 	}
+
 	group, start, end := s.getOffsets(pos)
+
+	current := s.lengths[pos]
+	g := &s.groups[group]
+	diff := length - int(current)
+	switch {
+	case diff > 0 && cap(*g) > (len(*g)+diff):
+		*g = (*g)[:len(*g)+diff]
+		copy((*g)[int(end)+diff:], (*g)[end:])
+		break
+	case diff > 0:
+		*g = append(*g, s.buffer[:length]...)
+		copy((*g)[int(end)+diff:], (*g)[end:])
+		break
+	case diff < 0:
+		copy((*g)[int(end)+diff:], (*g)[end:])
+		*g = (*g)[:len(*g)+diff]
+		break
+	}
 	s.lengths[pos] = uint8(length)
-	n, err := r.Read(s.buffer[:length])
+
+	n, err := r.Read((*g)[start : int(start)+length])
 	if n != length {
 		return &Error{pos: pos, ShortRead: true}
 	}
-	s.groups[group] = append(s.groups[group][:start], append(s.buffer[:length], s.groups[group][end:]...)...)
 	if err == io.EOF {
 		return nil
 	}
