@@ -55,7 +55,7 @@ func readUvarint32(buf []byte, pos int) (uint32, int) {
 		x |= uint64(b&0x7f) << s
 		s += 7
 	}
-	return 0, pos
+	return 0, pos + 1
 }
 
 func putUvarint32(buf []byte, pos int, value uint32) int {
