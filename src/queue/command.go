@@ -44,7 +44,7 @@ func AddDocument(item *QueueItem, registry *registry.Registry, client *posting.C
 	if err = doc.Save(registry); err != nil {
 		return err
 	}
-	if err = client.CallMultiple("Posting.Add", &posting.DocumentArg{Id: &doc.Id}); err != nil {
+	if err = client.CallMultiple("Posting.Add", &document.DocumentArg{Id: &doc.Id}); err != nil {
 		return err
 	}
 	return nil
@@ -55,7 +55,7 @@ func DeleteDocument(item *QueueItem, registry *registry.Registry, client *postin
 	if err != nil {
 		return err
 	}
-	if err = client.CallMultiple("Posting.Delete", &posting.DocumentArg{Id: &doc.Id}); err != nil {
+	if err = client.CallMultiple("Posting.Delete", &document.DocumentArg{Id: &doc.Id}); err != nil {
 		return err
 	}
 	if err = doc.Delete(registry); err != nil {
@@ -71,7 +71,7 @@ func TestCorpus(item *QueueItem, registry *registry.Registry, client *posting.Cl
 		if err != nil {
 			return err
 		}
-		if err = client.CallMultiple("Posting.Add", &posting.DocumentArg{Id: &doc.Id}); err != nil {
+		if err = client.CallMultiple("Posting.Add", &document.DocumentArg{Id: &doc.Id}); err != nil {
 			return err
 		}
 	}

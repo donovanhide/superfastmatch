@@ -8,14 +8,6 @@ import (
 	"testing/quick"
 )
 
-func SumUint8(x []uint8) uint64 {
-	sum := uint64(0)
-	for _, v := range x {
-		sum += uint64(v)
-	}
-	return sum
-}
-
 type TestSlice []uint8
 
 func buildTestSlice(length int, capacity int) TestSlice {
@@ -59,7 +51,7 @@ func runBenchmark(f func(x []uint8) uint64, numbers []uint8, b *testing.B) {
 }
 
 func TestBenchmark(t *testing.T) {
-	benchmarks := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 15, 16, 31, 32, 63, 64, 100, 135, 256, 1 << 10, 1 << 16}
+	benchmarks := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 24, 31, 32, 63, 64, 100, 135, 256, 1 << 10}
 	results := "Benchmark Results\n"
 	for _, n := range benchmarks {
 		slice := buildTestSlice(n, n)

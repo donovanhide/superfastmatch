@@ -16,7 +16,7 @@ func (s *RegistrySuite) TestNewRegistry(c *C) {
 	defaults.Open()
 	c.Check(defaults.session, NotNil)
 	c.Check(defaults.HashWidth, Equals, uint64(24))
-	c.Check(defaults.WindowSize, Equals, uint64(16))
+	c.Check(defaults.WindowSize, Equals, uint64(30))
 	// bad := NewRegistry([]string{"-hash_width=9999", "-window_size=9999"})
 	// c.Check(bad.session, NotNil)
 	// c.Check(bad.HashWidth, Equals, uint64(24))

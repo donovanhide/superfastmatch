@@ -3,6 +3,7 @@ package document
 import (
 	"code.google.com/p/gorilla/mux"
 	"errors"
+	"exp/utf8string"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -12,27 +13,41 @@ import (
 	"unicode/utf8"
 )
 
+type MetaMap map[string]interface{}
+type HashSet map[uint64]struct{}
+type PositionSet map[int]struct{}
+type IntersectionMap map[uint64]PositionSet
+
 type HashKey struct {
 	WindowSize uint64
 	HashWidth  uint64
 }
 
 type DocumentID struct {
-	Doctype uint32
-	Docid   uint32
+	Doctype uint32 `json:"doctype"`
+	Docid   uint32 `json:"docid"`
 }
 
 type Document struct {
-	Id             DocumentID `bson:"_id"`
-	Title          string
-	Text           string `json:",omitempty"`
-	Length         uint64
-	Meta           map[string]interface{}
+	Id             DocumentID    `json:"id" bson:"_id"`
+	Title          string        `json:"title"`
+	Text           string        `json:",omitempty"`
+	Length         uint64        `json:"characters"`
+	Meta           MetaMap       `json:"metaData,omitempty"`
+	Associations   *Associations `json:",omitempty"`
 	hashes         map[HashKey][]uint64
-	normalisedText string
+	hashsets       map[HashKey]HashSet
+	blooms         map[HashKey]Bloom
+	normalisedText *utf8string.String
 }
 
-var words []string
+func (p PositionSet) Clone() PositionSet {
+	c := make(PositionSet, len(p))
+	for k := range p {
+		c[k] = struct{}{}
+	}
+	return c
+}
 
 func (k *HashKey) String() string {
 	return fmt.Sprintf("Window Size: %v Hash Width: %v", k.WindowSize, k.HashWidth)
@@ -65,44 +80,49 @@ func (d *DocumentID) String() string {
 	return fmt.Sprintf("(%v,%v)", d.Doctype, d.Docid)
 }
 
-func BuildDocument(doctype uint32, docid uint32, title string, text string) (*Document, error) {
+func (d *Document) String() string {
+	return fmt.Sprintf("%v %v %v", d.Id, d.Length, d.Title)
+}
+
+func BuildDocument(doctype uint32, docid uint32, title string, text string, meta MetaMap) (*Document, error) {
 	return &Document{
-		Id:     DocumentID{Doctype: doctype, Docid: docid},
-		Title:  title,
-		Text:   text,
-		Length: uint64(utf8.RuneCountInString(text)),
+		Id:       DocumentID{Doctype: doctype, Docid: docid},
+		Title:    title,
+		Text:     text,
+		Meta:     meta,
+		Length:   uint64(utf8.RuneCountInString(text)),
+		hashsets: make(map[HashKey]HashSet),
+		hashes:   make(map[HashKey][]uint64),
+		blooms:   make(map[HashKey]Bloom),
 	}, nil
 }
 
 func NewDocument(id *DocumentID, values *url.Values) (*Document, error) {
-	if len(values.Get("title")) == 0 || len(values.Get("text")) == 0 {
+	title, text := values.Get("title"), values.Get("text")
+	if len(title) == 0 || len(text) == 0 {
 		return nil, errors.New("Missing title or text fields")
 	}
-	if !utf8.ValidString(values.Get("title")) || !utf8.ValidString(values.Get("text")) {
+	if !utf8.ValidString(title) || !utf8.ValidString(text) {
 		return nil, errors.New("Invalid UTF8 submitted")
 	}
-	meta := make(map[string]interface{})
+	meta := make(MetaMap)
 	for k, v := range *values {
 		if k != "title" && k != "text" {
 			meta[k] = v
 		}
 	}
-	return &Document{
-		Id:     *id,
-		Title:  values.Get("title"),
-		Text:   values.Get("text"),
-		Meta:   meta,
-		Length: uint64(utf8.RuneCountInString(values.Get("text"))),
-	}, nil
+	return BuildDocument(id.Doctype, id.Docid, title, text, meta)
 }
 
 func GetDocument(id *DocumentID, registry *registry.Registry) (*Document, error) {
-	document := Document{Id: *id}
-	err := registry.C("documents").FindId(document.Id).One(&document)
-	if err != nil {
+	doc := &Document{Id: *id}
+	if err := registry.C("documents").FindId(doc.Id).One(doc); err != nil {
 		return nil, err
 	}
-	return &document, nil
+	doc.hashsets = make(map[HashKey]HashSet)
+	doc.hashes = make(map[HashKey][]uint64)
+	doc.blooms = make(map[HashKey]Bloom)
+	return doc, nil
 }
 
 func GetDocuments(ids []DocumentID, registry *registry.Registry) chan *Document {
@@ -127,24 +147,98 @@ func (document *Document) Delete(registry *registry.Registry) error {
 	return registry.C("documents").RemoveId(document.Id)
 }
 
-func (document *Document) NormalisedText() string {
-	if len(document.normalisedText) == 0 {
-		document.normalisedText = strings.Map(normaliseRune, document.Text)
+func (d *Document) AddAssociation(registry *registry.Registry, other *Document, saveThemes bool) *Association {
+	if d.Associations == nil {
+		d.Associations = &Associations{}
 	}
-	return document.normalisedText
+	association, themes := BuildAssociation(registry.WindowSize, d, other)
+	d.Associations.Documents = append(d.Associations.Documents, *association)
+	if saveThemes {
+		themes.Save(registry)
+	}
+	return association
 }
 
-func (document *Document) Hashes(key HashKey) []uint64 {
-	hashes, ok := document.hashes[key]
-	if !ok {
-		length := document.Length - key.WindowSize + 1
-		if length > 0 {
-			hashes = rollingRabinKarp(document.NormalisedText(), length, key)
-		}
-		if document.hashes == nil {
-			document.hashes = make(map[HashKey][]uint64)
-		}
-		document.hashes[key] = hashes
+func (d *Document) NormalisedText() *utf8string.String {
+	if d.normalisedText == nil {
+		d.normalisedText = utf8string.NewString(strings.Map(normaliseRune, d.Text))
 	}
+	return d.normalisedText
+}
+
+func (d *Document) Hashes(key HashKey) []uint64 {
+	hashes, ok := d.hashes[key]
+	if ok {
+		return hashes
+	}
+	length := d.Length - key.WindowSize + 1
+	if length > 0 {
+		hashes = rollingRabinKarp3(d.NormalisedText().String(), length, key)
+	}
+	d.hashes[key] = hashes
 	return hashes
+}
+
+func (d *Document) Intersection(other *Document, hashKey HashKey) (IntersectionMap, Bloom) {
+	ws := whiteSpaceHash(hashKey)
+	hashes := other.HashSet(hashKey)
+	bloom := other.Bloom(hashKey)
+	inter := make(IntersectionMap)
+	b := NewFixedBloom(uint64(len(d.Hashes(hashKey))), 0.2)
+	for i, h := range d.Hashes(hashKey) {
+		if h != ws && bloom.Test(h) {
+			if _, ok := hashes[h]; ok {
+				if positions, ok := inter[h]; ok {
+					positions[i] = struct{}{}
+				} else {
+					b.Set(h)
+					inter[h] = PositionSet{i: {}}
+				}
+			}
+		}
+	}
+	return inter, b
+}
+
+func (d *Document) Common(other *Document, hashKey HashKey) PairSlice {
+	inter, bloom := other.Intersection(d, hashKey)
+	pairs := make(PairSlice, 0, len(inter))
+	ws := whiteSpaceHash(hashKey)
+	for i, h := range d.Hashes(hashKey) {
+		if h != ws && bloom.Test(h) {
+			if positions, ok := inter[h]; ok {
+				pairs = append(pairs, Pair{left: i, right: positions.Clone()})
+			}
+		}
+	}
+	return pairs
+}
+
+func (d *Document) HashSet(key HashKey) HashSet {
+	hashset, ok := d.hashsets[key]
+	if ok {
+		return hashset
+	}
+	ws := whiteSpaceHash(key)
+	hashset = make(HashSet)
+	for _, h := range d.Hashes(key) {
+		if h != ws {
+			hashset[h] = struct{}{}
+		}
+	}
+	d.hashsets[key] = hashset
+	return hashset
+}
+
+func (d *Document) Bloom(key HashKey) Bloom {
+	bloom, ok := d.blooms[key]
+	if ok {
+		return bloom
+	}
+	bloom = NewFixedBloom(d.Length, 0.1)
+	for h := range d.HashSet(key) {
+		bloom.Set(h)
+	}
+	d.blooms[key] = bloom
+	return bloom
 }

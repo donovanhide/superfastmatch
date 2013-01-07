@@ -22,15 +22,15 @@ func (s *PostingSuite) TestSimpleAddDocument(c *C) {
 	text := document.RandomWords(120)
 	p := newPosting(s.Registry, "test")
 	p.Init(&s.Registry.PostingConfigs[0], nil)
-	doc1, _ := document.BuildDocument(1, 2, "Document 1", text)
+	doc1, _ := document.BuildDocument(1, 2, "Document 1", text, nil)
 	err := doc1.Save(s.Registry)
 	c.Assert(err, IsNil)
-	err = p.Add(&DocumentArg{Id: &doc1.Id}, nil)
+	err = p.Add(&document.DocumentArg{Id: &doc1.Id}, nil)
 	c.Assert(err, IsNil)
-	doc2, _ := document.BuildDocument(1, 7, "Document 2", text)
+	doc2, _ := document.BuildDocument(1, 7, "Document 2", text, nil)
 	err = doc2.Save(s.Registry)
 	c.Assert(err, IsNil)
-	err = p.Add(&DocumentArg{Id: &doc2.Id}, nil)
+	err = p.Add(&document.DocumentArg{Id: &doc2.Id}, nil)
 	c.Assert(err, IsNil)
 }
 
@@ -55,11 +55,11 @@ func (s *PostingSuite) TestAddDocumentWithoutClient(c *C) {
 	p.Init(&s.Registry.PostingConfigs[0], nil)
 	ids := buildDocuments(s, c)
 	for _, id := range ids {
-		err := p.Add(&DocumentArg{Id: id}, nil)
+		err := p.Add(&document.DocumentArg{Id: id}, nil)
 		c.Assert(err, IsNil)
 	}
 	for _, id := range ids {
-		err := p.Delete(&DocumentArg{Id: id}, nil)
+		err := p.Delete(&document.DocumentArg{Id: id}, nil)
 		c.Assert(err, IsNil)
 	}
 }
@@ -71,11 +71,11 @@ func (s *PostingSuite) TestAddDocumentViaClient(c *C) {
 	c.Check(err, IsNil)
 	ids := buildDocuments(s, c)
 	for _, id := range ids {
-		err = client.CallMultiple("Posting.Add", &DocumentArg{Id: id})
+		err = client.CallMultiple("Posting.Add", &document.DocumentArg{Id: id})
 		c.Assert(err, IsNil)
 	}
 	for _, id := range ids {
-		err = client.CallMultiple("Posting.Delete", &DocumentArg{Id: id})
+		err = client.CallMultiple("Posting.Delete", &document.DocumentArg{Id: id})
 		c.Assert(err, IsNil)
 	}
 	client.Close()
@@ -87,10 +87,10 @@ func (s *PostingSuite) TestTemporarySearch(c *C) {
 	client.Initialise()
 	ids := buildDocuments(s, c)
 	for _, id := range ids {
-		err = client.CallMultiple("Posting.Add", &DocumentArg{Id: id})
+		err = client.CallMultiple("Posting.Add", &document.DocumentArg{Id: id})
 		c.Assert(err, IsNil)
 	}
-	tempSearch := &DocumentArg{Text: document.RandomWords(10000)}
+	tempSearch := &document.DocumentArg{Text: document.RandomWords(10000)}
 	_, err = client.Search(tempSearch)
 	// c.Check(len(results.), Equals, 0)
 	c.Assert(err, IsNil)

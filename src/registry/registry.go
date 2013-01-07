@@ -44,7 +44,7 @@ type Registry struct {
 
 func parseFlags(args []string) *flags {
 	f := flags{
-		WindowSize:       16,
+		WindowSize:       30,
 		HashWidth:        24,
 		GroupSize:        24,
 		PostingAddresses: []string{"127.0.0.1:8090", "127.0.0.1:8091"},

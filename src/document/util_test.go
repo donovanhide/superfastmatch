@@ -54,21 +54,26 @@ func Benchmark_RabinKarp(b *testing.B) {
 	benchmarkHasher(b, rollingRabinKarp, testFiles)
 }
 
+func Benchmark_RabinKarp3(b *testing.B) {
+	benchmarkHasher(b, rollingRabinKarp3, testFiles)
+}
+
 func testHasher(t *testing.T, hasher HasherFunc) {
-	text := "Text gobble Text"
+	text := "Text gobble! Text"
 	count := uint64(utf8.RuneCountInString(text) - 3)
 	key := HashKey{WindowSize: 4, HashWidth: 10}
 	hashes := hasher(text, count, key)
-	if len(hashes) != 13 {
+	if len(hashes) != 14 {
 		t.Errorf("Wrong number of hashes: %v", hashes)
 	}
-	if hashes[0] != hashes[12] {
-		t.Errorf("Incorrect hashes created: %v %v %v", hashes[0], hashes[12], hashes)
+	if hashes[0] != hashes[13] {
+		t.Errorf("Incorrect hashes created: %v %v %v", hashes[0], hashes[13], hashes)
 	} else {
-		t.Logf("Correct hashes created: %v %v %v", hashes[0], hashes[12], hashes)
+		t.Logf("Correct hashes created: %v %v %v", hashes[0], hashes[13], hashes)
 	}
 }
 
 func Test_Hashers(t *testing.T) {
 	testHasher(t, rollingRabinKarp)
+	testHasher(t, rollingRabinKarp3)
 }

@@ -1,48 +1,65 @@
 package document
 
 import (
+	"bytes"
 	"fmt"
 	"registry"
 	"sort"
+	"time"
 )
 
-type SearchResult struct {
-	Success   bool          `json:"success"`
-	TotalRows uint64        `json:"totalRows"`
-	Documents []DocumentRow `json:"documents"`
+type DocumentArg struct {
+	Id   *DocumentID
+	Text string
 }
 
-type DocumentRow struct {
-	Document
-	Fragments     []uint32 `json:"fragments"`
-	FragmentCount uint32   `json:"fragment_count"`
+type SearchResult struct {
+	Success      bool          `json:"success"`
+	TotalRows    int           `json:"totalRows"`
+	Associations []Association `json:"documents"`
 }
 
 type Tally struct {
-	Last      uint32
 	Count     uint64
 	SumDeltas uint64
+	Last      uint32
+}
+
+type Match struct {
+	Count     uint64
+	SumDeltas uint64
+	Id        DocumentID
+}
+
+func (a *DocumentArg) GetDocument(registry *registry.Registry) (*Document, error) {
+	if a.Id != nil {
+		return GetDocument(a.Id, registry)
+	}
+	return BuildDocument(0, 0, "", a.Text, nil)
 }
 
 func (t *Tally) String() string {
 	return fmt.Sprintf("Average Delta: %.2f Count: %d\n", float64(t.SumDeltas)/float64(t.Count), t.Count)
 }
 
-type Match struct {
-	Id        DocumentID
-	Count     uint64
-	SumDeltas uint64
-}
-
 func (m *Match) String() string {
-	return fmt.Sprintf("Document: %v Average Delta: %.2f Sum of Deltas: %d Count: %d", m.Id, float64(m.SumDeltas)/float64(m.Count), m.SumDeltas, m.Count)
+	var out bytes.Buffer
+	var coverage float64
+	// if m.Document != nil {
+	// 	out.WriteString(fmt.Sprintf("Document: %v", m.Document))
+	// 	coverage = (float64(m.Count) / float64(m.Document.Length)) * 100
+	// } else {
+	// 	out.WriteString(fmt.Sprintf("Document: %v", m.Id))
+	// }
+	out.WriteString(fmt.Sprintf(" Average Delta: %.2f Sum of Deltas: %d Count: %d Coverage: %.2f%%\n", float64(m.SumDeltas)/float64(m.Count), m.SumDeltas, m.Count, coverage))
+	return out.String()
 }
 
-type Matches []Match
+type MatchSlice []Match
 
-func (m Matches) Len() int      { return len(m) }
-func (m Matches) Swap(i, j int) { m[i], m[j] = m[j], m[i] }
-func (m Matches) Less(i, j int) bool {
+func (m MatchSlice) Len() int      { return len(m) }
+func (m MatchSlice) Swap(i, j int) { m[i], m[j] = m[j], m[i] }
+func (m MatchSlice) Less(i, j int) bool {
 	return float64(m[i].SumDeltas)/float64(m[i].Count) < float64(m[j].SumDeltas)/float64(m[j].Count)
 }
 
@@ -50,7 +67,7 @@ type SearchMap map[DocumentID]*Tally
 
 type SearchGroup []SearchMap
 
-func (s *SearchGroup) Merge() Matches {
+func (s *SearchGroup) Merge() *MatchSlice {
 	merged := make(SearchMap)
 	for i, _ := range *s {
 		for k, v := range (*s)[i] {
@@ -67,26 +84,50 @@ func (s *SearchGroup) Merge() Matches {
 			}
 		}
 	}
-	matches := make(Matches, len(merged))
+	matches := make(MatchSlice, len(merged))
 	i := 0
 	for k, v := range merged {
 		matches[i] = Match{Id: k, Count: v.Count, SumDeltas: v.SumDeltas}
 		i++
 	}
 	sort.Sort(matches)
-	return matches
+	return &matches
 }
 
-func (s *SearchGroup) GetResult(registry *registry.Registry) *SearchResult {
-	matches := s.Merge()
-	docids := make([]DocumentID, len(matches))
-	for i, m := range matches {
-		docids[i] = m.Id
-		fmt.Println(m.String())
+func (m *MatchSlice) String() string {
+	var out bytes.Buffer
+	for _, v := range *m {
+		out.WriteString(v.String())
 	}
-	ch := GetDocuments(docids, registry)
-	for doc := range ch {
-		fmt.Println(doc.Title)
+	return out.String()
+}
+
+func (m *MatchSlice) Fill(registry *registry.Registry, doc *Document) {
+	fills := make(map[DocumentID]*Match)
+	docids := make([]DocumentID, len(*m))
+	for i, _ := range *m {
+		docids[i] = (*m)[i].Id
+		fills[(*m)[i].Id] = &(*m)[i]
 	}
-	return nil
+	searchStart := time.Now()
+	for other := range GetDocuments(docids, registry) {
+		start := time.Now()
+		doc.AddAssociation(registry, other, false)
+		fmt.Printf("Document: %v Association Time:%.2fs\n", other, time.Now().Sub(start).Seconds())
+	}
+	fmt.Printf("Search Time:%.2fs\n", time.Now().Sub(searchStart).Seconds())
+}
+
+func (s *SearchGroup) GetResult(registry *registry.Registry, d *DocumentArg) (*SearchResult, error) {
+	doc, err := d.GetDocument(registry)
+	if err != nil {
+		return nil, err
+	}
+	s.Merge().Fill(registry, doc)
+	result := &SearchResult{
+		Success:      true,
+		TotalRows:    len(doc.Associations.Documents),
+		Associations: doc.Associations.Documents,
+	}
+	return result, nil
 }

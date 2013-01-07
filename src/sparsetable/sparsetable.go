@@ -9,6 +9,14 @@ import (
 	"unsafe"
 )
 
+func SumUint8(x []uint8) uint64 {
+	sum := uint64(0)
+	for _, v := range x {
+		sum += uint64(v)
+	}
+	return sum
+}
+
 func FastSumUint8(x []uint8) uint64
 
 const MAX_SIZE = 255
@@ -56,6 +64,7 @@ func Init(size uint64, groupSize uint64) *SparseTable {
 func (s *SparseTable) getOffsets(pos uint64) (uint64, uint64, uint64) {
 	group := pos / s.groupSize
 	start := FastSumUint8(s.lengths[group*s.groupSize : pos])
+	//start := SumUint8(s.lengths[group*s.groupSize : pos])
 	end := start + uint64(s.lengths[pos])
 	return group, start, end
 }

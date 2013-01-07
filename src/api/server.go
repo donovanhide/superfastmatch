@@ -88,13 +88,12 @@ func indexHandler(rw http.ResponseWriter, req *http.Request) *appError {
 
 func searchHandler(rw http.ResponseWriter, req *http.Request) *appError {
 	fillValues(req)
-	search := &posting.DocumentArg{Text: req.Form.Get("text")}
+	search := &document.DocumentArg{Text: req.Form.Get("text")}
 	rows, err := c.Search(search)
 	if err != nil {
 		return &appError{err, "Search problem", 500}
 	}
 	return writeJson(rw, req, rows, 200)
-	return nil
 }
 
 func Serve(registry *registry.Registry) {

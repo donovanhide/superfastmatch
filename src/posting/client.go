@@ -75,7 +75,7 @@ func (p *Client) Close() {
 	}
 }
 
-func (p *Client) Search(d *DocumentArg) (*document.SearchResult, error) {
+func (p *Client) Search(d *document.DocumentArg) (*document.SearchResult, error) {
 	result := make(document.SearchGroup, len(p.clients))
 	done := make(chan *rpc.Call, len(p.clients))
 	for i, _ := range p.clients {
@@ -87,7 +87,7 @@ func (p *Client) Search(d *DocumentArg) (*document.SearchResult, error) {
 			return nil, replyCall.Error
 		}
 	}
-	return result.GetResult(p.registry), nil
+	return result.GetResult(p.registry, d)
 }
 
 // Don't care about the replies, just check the error

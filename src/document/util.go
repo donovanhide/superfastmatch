@@ -2,13 +2,42 @@ package document
 
 import (
 	"bytes"
-	"container/heap"
 	"io/ioutil"
 	"math/rand"
 	"strings"
 	"unicode"
-	"unicode/utf8"
 )
+
+const maxWindowSize = 256
+const base uint64 = 37
+
+var bases = make([][]uint64, maxWindowSize+1)
+var words []string
+var whiteSpaceHashes = make(map[HashKey]uint64, maxWindowSize+1)
+
+func init() {
+	bases[0] = []uint64{}
+	bases[1] = []uint64{base}
+	for i := 2; i <= maxWindowSize; i++ {
+		bases[i] = make([]uint64, i)
+		bases[i][i-1] = 1
+		for j := i - 2; ; j-- {
+			bases[i][j] = bases[i][j+1] * base
+			if j == 0 {
+				break
+			}
+		}
+	}
+}
+
+func whiteSpaceHash(hashKey HashKey) uint64 {
+	if hash, ok := whiteSpaceHashes[hashKey]; ok {
+		return hash
+	}
+	hash := rollingRabinKarp(strings.Repeat(" ", int(hashKey.WindowSize)), hashKey.WindowSize, hashKey)[0]
+	whiteSpaceHashes[hashKey] = hash
+	return hash
+}
 
 type HasherFunc func(text string, length uint64, key HashKey) []uint64
 
@@ -58,35 +87,43 @@ func rollingRabinKarp(text string, length uint64, key HashKey) []uint64 {
 	return hashes
 }
 
-func rollingRabinKarp2(text string, windowSize int, count int) []uint32 {
-	const base uint32 = 37
-	bases := make([]uint32, windowSize)
-	hashes := make([]uint32, count)
-	previous := make([]uint32, windowSize)
-	previousMarker := 0
-	reader := strings.NewReader(text)
-	hash := uint32(0)
-	bases[windowSize-1] = 1
-	for i := windowSize - 2; i >= 0; i-- {
-		bases[i] = bases[i+1] * base
+func initialHash(text string, windowSize uint64) (high, hash uint64, offset int, previous []uint64) {
+	previous = make([]uint64, windowSize)
+	b, j := bases[windowSize], 0
+	high = b[0]
+	for i, r := range text {
+		previous[j] = uint64(r)
+		hash += uint64(r) * b[j]
+		j++
+		if j == int(windowSize) {
+			offset = i + 1
+			break
+		}
 	}
-	high := bases[0]
-	for i := 0; i < windowSize; i++ {
-		r, _, _ := reader.ReadRune()
-		previous[i] = uint32(r)
-		hash += uint32(r) * bases[i]
-	}
-	hashes[0] = hash
-	for i := 1; i < count; i++ {
-		r, _, _ := reader.ReadRune()
-		hash -= previous[previousMarker] * high
-		previous[previousMarker] = uint32(r)
-		previousMarker = (previousMarker + 1) % windowSize
-		hash *= base
-		hash += uint32(r)
-		hashes[i] = hash
+	return
+}
+
+func buildHashes(text string, length, windowSize, hashWidth, high, hash uint64, previous []uint64) []uint64 {
+	prev, hashMask, hashes := 0, uint64(1<<hashWidth)-1, make([]uint64, length)
+	hashes[0] = ((hash >> hashWidth) ^ hash) & hashMask
+	i, limit := 1, len(previous)
+	for _, r := range text {
+		p, h, u := &previous[prev], &hashes[i], uint64(r)
+		hash = (hash-(*p*high))*base + u
+		i++
+		prev++
+		if prev == limit {
+			prev = 0
+		}
+		*p = u
+		*h = ((hash >> hashWidth) ^ hash) & hashMask
 	}
 	return hashes
+}
+
+func rollingRabinKarp3(text string, length uint64, key HashKey) []uint64 {
+	high, hash, offset, previous := initialHash(text, key.WindowSize)
+	return buildHashes(text[offset:], length, key.WindowSize, key.HashWidth, high, hash, previous)
 }
 
 const whiteSpace = rune(' ')
@@ -135,62 +172,7 @@ func RandomWords(maxLength int) string {
 }
 
 func NewTestDocument(id *DocumentID, maxLength int) (*Document, error) {
+	title := RandomWords(rand.Intn(5) + 5)
 	text := RandomWords(rand.Intn(maxLength) + 100)
-	return &Document{
-		Id:     *id,
-		Title:  RandomWords(rand.Intn(5) + 5),
-		Text:   text,
-		Length: uint64(utf8.RuneCountInString(text)),
-	}, nil
-}
-
-// An Item is something we manage in a priority queue.
-type Item struct {
-	value    string // The value of the item; arbitrary.
-	priority int    // The priority of the item in the queue.
-	// The index is needed by changePriority and is maintained by the heap.Interface methods.
-	index int // The index of the item in the heap.
-}
-
-type PriorityQueue []*Item
-
-func (pq PriorityQueue) Len() int { return len(pq) }
-
-func (pq PriorityQueue) Less(i, j int) bool {
-	return pq[i].priority > pq[j].priority
-}
-
-func (pq PriorityQueue) Swap(i, j int) {
-	pq[i], pq[j] = pq[j], pq[i]
-	pq[i].index = i
-	pq[j].index = j
-}
-
-func (pq *PriorityQueue) Push(x interface{}) {
-	n := len(*pq)
-	item := x.(*Item)
-	item.index = n
-	*pq = append(*pq, item)
-}
-
-func (pq *PriorityQueue) Pop() interface{} {
-	a := *pq
-	n := len(a)
-	item := a[n-1]
-	item.index = -1 // for safety
-	*pq = a[0 : n-1]
-	return item
-}
-
-func (pq *PriorityQueue) update(value string, priority int) {
-	item := heap.Pop(pq).(*Item)
-	item.value = value
-	item.priority = priority
-	heap.Push(pq, item)
-}
-
-func (pq *PriorityQueue) changePriority(item *Item, priority int) {
-	heap.Remove(pq, item.index)
-	item.priority = priority
-	heap.Push(pq, item)
+	return BuildDocument(id.Doctype, id.Docid, title, text, nil)
 }

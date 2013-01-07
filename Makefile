@@ -4,7 +4,7 @@ PKGS=$(notdir $(wildcard src/*))
 
 run:
 	go install -v superfastmatch
-	go build -v -o ./bin/superfastmatch superfastmatch
+	go build -v -o  ./bin/superfastmatch superfastmatch
 	./bin/superfastmatch
 
 dist:
@@ -33,7 +33,7 @@ test:
 	rm -f test.log
 	mkdir -p data/test/
 	mongo/bin/mongod --fork --logpath=test.log --dbpath=data/test/
-	@$(foreach test,$(PKGS),go test $(test);)
+	@$(foreach test,$(PKGS),go test -v $(test);)
 	mongo/bin/mongo admin --eval "db.shutdownServer()"
 
 dependencies:

@@ -11,18 +11,6 @@ import (
 	"time"
 )
 
-type DocumentArg struct {
-	Id   *document.DocumentID
-	Text string
-}
-
-func (a *DocumentArg) GetDocument(registry *registry.Registry) (*document.Document, error) {
-	if a.Id != nil {
-		return document.GetDocument(a.Id, registry)
-	}
-	return document.BuildDocument(0, 0, "", a.Text)
-}
-
 type Posting struct {
 	logger      *log.Logger
 	initialised bool
@@ -189,7 +177,7 @@ func (p *Posting) Init(conf *registry.PostingConfig, reply *bool) error {
 	return nil
 }
 
-func (p *Posting) Add(arg *DocumentArg, _ *struct{}) error {
+func (p *Posting) Add(arg *document.DocumentArg, _ *struct{}) error {
 	doc, err := arg.GetDocument(p.registry)
 	if err != nil {
 		return err
@@ -197,7 +185,7 @@ func (p *Posting) Add(arg *DocumentArg, _ *struct{}) error {
 	return p.add(doc)
 }
 
-func (p *Posting) Delete(arg *DocumentArg, _ *struct{}) error {
+func (p *Posting) Delete(arg *document.DocumentArg, _ *struct{}) error {
 	doc, err := arg.GetDocument(p.registry)
 	if err != nil {
 		return err
@@ -205,7 +193,7 @@ func (p *Posting) Delete(arg *DocumentArg, _ *struct{}) error {
 	return p.remove(doc)
 }
 
-func (p *Posting) Search(arg *DocumentArg, result *document.SearchMap) error {
+func (p *Posting) Search(arg *document.DocumentArg, result *document.SearchMap) error {
 	doc, err := arg.GetDocument(p.registry)
 	if err != nil {
 		return err
