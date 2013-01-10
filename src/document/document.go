@@ -41,14 +41,6 @@ type Document struct {
 	normalisedText *utf8string.String
 }
 
-func (p PositionSet) Clone() PositionSet {
-	c := make(PositionSet, len(p))
-	for k := range p {
-		c[k] = struct{}{}
-	}
-	return c
-}
-
 func (k *HashKey) String() string {
 	return fmt.Sprintf("Window Size: %v Hash Width: %v", k.WindowSize, k.HashWidth)
 }
@@ -200,14 +192,14 @@ func (d *Document) Intersection(other *Document, hashKey HashKey) (IntersectionM
 	return inter, b
 }
 
-func (d *Document) Common(other *Document, hashKey HashKey) PairSlice {
+func (d *Document) Common(other *Document, hashKey HashKey) *Pairs {
 	inter, bloom := other.Intersection(d, hashKey)
-	pairs := make(PairSlice, 0, len(inter))
+	pairs := NewPairs(len(inter))
 	ws := whiteSpaceHash(hashKey)
 	for i, h := range d.Hashes(hashKey) {
 		if h != ws && bloom.Test(h) {
 			if positions, ok := inter[h]; ok {
-				pairs = append(pairs, Pair{left: i, right: positions.Clone()})
+				pairs.Append(i, positions)
 			}
 		}
 	}
