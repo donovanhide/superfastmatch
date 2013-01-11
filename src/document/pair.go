@@ -24,15 +24,9 @@ func NewPairs(estimate int) *Pairs {
 	}
 }
 
-func (p *Pairs) Append(left int, right PositionSet) {
+func (p *Pairs) Append(left int, right PositionSlice) {
 	p.steps = append(p.steps, Step{left: left, length: len(right)})
-	length := len(p.right)
-	for r := range right {
-		i := sort.IntSlice(p.right[length:]).Search(r)
-		p.right = append(p.right, 0)
-		copy(p.right[length+i+1:], p.right[length+i:])
-		p.right[length+i] = r
-	}
+	p.right = append(p.right, right...)
 }
 
 func (p *Pairs) BuildFragments(left *Document, windowSize, minLength int) (FragmentSlice, ThemeMap) {

@@ -15,12 +15,16 @@ import (
 
 type MetaMap map[string]interface{}
 type HashSet map[uint64]struct{}
-type PositionSet map[int]struct{}
-type IntersectionMap map[uint64]PositionSet
+type IntersectionMap map[uint64]PositionSlice
 
 type HashKey struct {
 	WindowSize uint64
 	HashWidth  uint64
+}
+
+type BloomKey struct {
+	HashKey
+	Size uint64
 }
 
 type DocumentID struct {
@@ -36,8 +40,8 @@ type Document struct {
 	Meta           MetaMap       `json:"metaData,omitempty"`
 	Associations   *Associations `json:",omitempty"`
 	hashes         map[HashKey][]uint64
-	hashsets       map[HashKey]HashSet
-	blooms         map[HashKey]Bloom
+	hashsets       map[BloomKey]HashSet
+	blooms         map[BloomKey]Bloom
 	normalisedText *utf8string.String
 }
 
@@ -76,17 +80,22 @@ func (d *Document) String() string {
 	return fmt.Sprintf("%v %v %v", d.Id, d.Length, d.Title)
 }
 
+func (d *Document) init() *Document {
+	d.hashes = make(map[HashKey][]uint64)
+	d.hashsets = make(map[BloomKey]HashSet)
+	d.blooms = make(map[BloomKey]Bloom)
+	return d
+}
+
 func BuildDocument(doctype uint32, docid uint32, title string, text string, meta MetaMap) (*Document, error) {
-	return &Document{
-		Id:       DocumentID{Doctype: doctype, Docid: docid},
-		Title:    title,
-		Text:     text,
-		Meta:     meta,
-		Length:   uint64(utf8.RuneCountInString(text)),
-		hashsets: make(map[HashKey]HashSet),
-		hashes:   make(map[HashKey][]uint64),
-		blooms:   make(map[HashKey]Bloom),
-	}, nil
+	doc := &Document{
+		Id:     DocumentID{Doctype: doctype, Docid: docid},
+		Title:  title,
+		Text:   text,
+		Meta:   meta,
+		Length: uint64(utf8.RuneCountInString(text)),
+	}
+	return doc.init(), nil
 }
 
 func NewDocument(id *DocumentID, values *url.Values) (*Document, error) {
@@ -111,14 +120,11 @@ func GetDocument(id *DocumentID, registry *registry.Registry) (*Document, error)
 	if err := registry.C("documents").FindId(doc.Id).One(doc); err != nil {
 		return nil, err
 	}
-	doc.hashsets = make(map[HashKey]HashSet)
-	doc.hashes = make(map[HashKey][]uint64)
-	doc.blooms = make(map[HashKey]Bloom)
-	return doc, nil
+	return doc.init(), nil
 }
 
 func GetDocuments(ids []DocumentID, registry *registry.Registry) chan *Document {
-	c := make(chan *Document, 20)
+	c := make(chan *Document, 5)
 	go func() {
 		for _, id := range ids {
 			if doc, err := GetDocument(&id, registry); err == nil {
@@ -171,33 +177,24 @@ func (d *Document) Hashes(key HashKey) []uint64 {
 	return hashes
 }
 
-func (d *Document) Intersection(other *Document, hashKey HashKey) (IntersectionMap, Bloom) {
-	ws := whiteSpaceHash(hashKey)
-	hashes := other.HashSet(hashKey)
-	bloom := other.Bloom(hashKey)
-	inter := make(IntersectionMap)
-	b := NewFixedBloom(uint64(len(d.Hashes(hashKey))), 0.2)
-	for i, h := range d.Hashes(hashKey) {
-		if h != ws && bloom.Test(h) {
+func (d *Document) Common(other *Document, hashKey HashKey) *Pairs {
+	bloomKey := BloomKey{
+		HashKey: hashKey,
+		Size:    d.Length,
+	}
+	hashes, bloom := d.HashSetAndBloom(bloomKey)
+	inter, interBloom := make(IntersectionMap), NewFixedBloom(d.Length, 0.9)
+	for i, h := range other.Hashes(hashKey) {
+		if bloom.Test(h) {
 			if _, ok := hashes[h]; ok {
-				if positions, ok := inter[h]; ok {
-					positions[i] = struct{}{}
-				} else {
-					b.Set(h)
-					inter[h] = PositionSet{i: {}}
-				}
+				inter[h] = append(inter[h], i)
+				interBloom.Set(h)
 			}
 		}
 	}
-	return inter, b
-}
-
-func (d *Document) Common(other *Document, hashKey HashKey) *Pairs {
-	inter, bloom := other.Intersection(d, hashKey)
 	pairs := NewPairs(len(inter))
-	ws := whiteSpaceHash(hashKey)
 	for i, h := range d.Hashes(hashKey) {
-		if h != ws && bloom.Test(h) {
+		if interBloom.Test(h) {
 			if positions, ok := inter[h]; ok {
 				pairs.Append(i, positions)
 			}
@@ -206,31 +203,21 @@ func (d *Document) Common(other *Document, hashKey HashKey) *Pairs {
 	return pairs
 }
 
-func (d *Document) HashSet(key HashKey) HashSet {
+func (d *Document) HashSetAndBloom(key BloomKey) (HashSet, Bloom) {
 	hashset, ok := d.hashsets[key]
 	if ok {
-		return hashset
+		return hashset, d.blooms[key]
 	}
-	ws := whiteSpaceHash(key)
+	bloom := NewFixedBloom(key.Size, 0.1)
+	ws := whiteSpaceHash(key.HashKey)
 	hashset = make(HashSet)
-	for _, h := range d.Hashes(key) {
+	for _, h := range d.Hashes(key.HashKey) {
 		if h != ws {
 			hashset[h] = struct{}{}
+			bloom.Set(h)
 		}
 	}
 	d.hashsets[key] = hashset
-	return hashset
-}
-
-func (d *Document) Bloom(key HashKey) Bloom {
-	bloom, ok := d.blooms[key]
-	if ok {
-		return bloom
-	}
-	bloom = NewFixedBloom(d.Length, 0.1)
-	for h := range d.HashSet(key) {
-		bloom.Set(h)
-	}
 	d.blooms[key] = bloom
-	return bloom
+	return hashset, bloom
 }

@@ -51,7 +51,6 @@ func benchmarkBloomCount(b *testing.B, bloom Bloom, r []uint64) {
 	setBloom(bloom, r)
 	testBloom(bloom, r)
 	b.ResetTimer()
-
 	if bloom.Count() == 0 {
 		b.Logf("Bad count\n")
 	}

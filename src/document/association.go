@@ -1,10 +1,7 @@
 package document
 
 import (
-	"bytes"
-	"fmt"
-	"runtime"
-	// "sort"
+// "runtime"
 )
 
 type Association struct {
@@ -18,59 +15,6 @@ type Associations struct {
 	Documents []Association
 }
 
-type Pair struct {
-	left  int
-	right PositionSet
-}
-
-type PairSlice []Pair
-
-func (p PairSlice) String() string {
-	var buf bytes.Buffer
-	for _, pair := range p {
-		buf.WriteString(fmt.Sprintf("%d: ", pair.left))
-		for pos := range pair.right {
-			buf.WriteString(fmt.Sprintf("%d,", pos))
-		}
-		buf.WriteByte('\n')
-	}
-	return buf.String()
-}
-
-// func (p PairSlice) BuildFragments(left, right *Document, windowSize, minLength int) (FragmentSlice, ThemeMap) {
-// 	fragments, themes := make(FragmentSlice, 0), make(ThemeMap)
-// 	for i, first := range p {
-// 		for r := range first.right {
-// 			length := r + 1
-// 			// fmt.Println("Before: ", i, r, length, p[i+1].right)
-// 			if p[i+1].right[length] == i {
-// 				// fmt.Println("Last:   ", i, r, length, p[i+1].right)
-// 				continue
-// 			}
-
-// 			for _, next := range p[i+1:] {
-// 				_, ok := next.right[length]
-// 				if !ok {
-// 					break
-// 				}
-// 				//next.right[length] = i + j
-// 				length++
-// 			}
-// 			fmt.Println("After:  ", i, r, length)
-// 			fragmentLength := length - r + windowSize - 1
-// 			if fragmentLength >= minLength {
-// 				fragment, theme := newFragment(left.NormalisedText(), first.left, r, fragmentLength)
-// 				if fragment.Length >= minLength {
-// 					fragments = append(fragments, *fragment)
-// 					themes[theme.Id] = *theme
-// 				}
-// 			}
-// 		}
-// 	}
-// 	sort.Sort(fragments)
-// 	return fragments, themes
-// }
-
 func BuildAssociation(windowSize uint64, left *Document, right *Document) (*Association, ThemeMap) {
 	var themes ThemeMap
 	var fragments FragmentSlice
@@ -78,9 +22,16 @@ func BuildAssociation(windowSize uint64, left *Document, right *Document) (*Asso
 		WindowSize: windowSize - 3, // Tunable! This helps eliminate false matches
 		HashWidth:  32,             // Tunable! Wider the better!
 	}
+	// if left.Length <= right.Length {
 	pairs := left.Common(right, hashKey)
-	runtime.GC()
+	// runtime.GC()
 	fragments, themes = pairs.BuildFragments(left, int(hashKey.WindowSize), int(windowSize))
+	// } else {
+	// pairs := right.Common(left, hashKey)
+	// fragments, themes = pairs.BuildFragments(right, int(hashKey.WindowSize), int(windowSize))
+	// fragments.Flip()
+	// }
+
 	right.Text = ""
 	right.Associations = nil
 	return &Association{

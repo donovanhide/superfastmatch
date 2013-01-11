@@ -6,6 +6,7 @@ import (
 )
 
 type Bloom interface {
+	Intersection(other Bloom) Bloom
 	Set(hash uint64)
 	Test(hash uint64) bool
 	String() string
@@ -60,6 +61,31 @@ func NewFixedBloom(n uint64, p float64) Bloom {
 		},
 		mask: size - 1,
 	}
+}
+
+func (b *DynamicBloom) Intersection(other Bloom) Bloom {
+	panic("not implemented")
+}
+
+func (b *FixedBloom) Intersection(a Bloom) Bloom {
+	other, ok := a.(*FixedBloom)
+	if !ok {
+		panic("Not a FixedBloom")
+	}
+	if b.size != other.size {
+		panic("Wrong size blooms intersected")
+	}
+	inter := &FixedBloom{
+		bloom: bloom{
+			bits: make([]uint64, len(b.bits)),
+			size: b.size,
+		},
+		mask: b.mask,
+	}
+	for i := range b.bits {
+		inter.bits[i] = b.bits[i] & other.bits[i]
+	}
+	return inter
 }
 
 func (b *FixedBloom) Set(hash uint64) {
