@@ -1,15 +1,35 @@
 package document
 
 import (
+	"bytes"
+	"fmt"
 	"sort"
 )
 
 type StepSlice []Step
-type PositionSlice sort.IntSlice
+type PositionSlice []int32
 
 type Step struct {
-	left   int
+	left   int32
+	start  int
 	length int
+}
+
+func (s StepSlice) Len() int           { return len(s) }
+func (s StepSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s StepSlice) Less(i, j int) bool { return s[i].left < s[j].left }
+
+func (s StepSlice) ShellSort() {
+	size := len(s)
+	for inc := size / 2; inc > 0; inc = (inc + 1) * 5 / 11 {
+		for i := inc; i < size; i++ {
+			j, temp := i, s[i]
+			for ; j >= inc && s[j-inc].left > temp.left; j -= inc {
+				s[j] = s[j-inc]
+			}
+			s[j] = temp
+		}
+	}
 }
 
 type Pairs struct {
@@ -24,37 +44,46 @@ func NewPairs(estimate int) *Pairs {
 	}
 }
 
-func (p *Pairs) Append(left int, right PositionSlice) {
-	p.steps = append(p.steps, Step{left: left, length: len(right)})
+func (p *Pairs) Append(left int32, right PositionSlice) {
+	p.steps = append(p.steps, Step{left: left, start: len(p.right), length: len(right)})
 	p.right = append(p.right, right...)
 }
 
+func (p *Pairs) Sort() {
+	p.steps.ShellSort()
+	// sort.Sort(p.steps)
+}
+
+func (p *Pairs) String() string {
+	var buf bytes.Buffer
+	for _, s := range p.steps {
+		buf.WriteString(fmt.Sprintf("%10d: %v\n", s.left, p.right[s.start:s.start+s.length]))
+	}
+	buf.WriteString(fmt.Sprintf("Steps Len: %d Capacity:%d Right Len:%d Capacity:%d", len(p.steps), cap(p.steps), len(p.right), cap(p.right)))
+	return buf.String()
+}
+
 func (p *Pairs) BuildFragments(left *Document, windowSize, minLength int) (FragmentSlice, ThemeMap) {
-	fragments, themes := make(FragmentSlice, 0, len(p.steps)), make(ThemeMap)
+	fragments, themes, text := make(FragmentSlice, 0, len(p.steps)), make(ThemeMap), left.NormalisedText()
 	buildFragment := func(l, r, length int) {
-		fragmentLength := length - r + windowSize - 1
+		fragmentLength := length - r + windowSize
 		if fragmentLength >= minLength {
-			fragment, theme := newFragment(left.NormalisedText(), l, r, fragmentLength)
+			fragment, theme := newFragment(text, l, r, fragmentLength)
 			if fragment.Length >= minLength {
 				fragments = append(fragments, *fragment)
 				themes[theme.Id] = *theme
 			}
 		}
 	}
-	counter := 0
-	// Please don't ever ask me to explain this
-	// It works and doesn't use maps
-	// Therefore it is fast and memory efficient :-)
 	for i, step := range p.steps {
-		for _, r := range p.right[counter : counter+step.length] {
-			length, offset := r+1, counter+step.length
+		for _, r := range p.right[step.start : step.start+step.length] {
+			length := r
 		gobble:
 			for _, next := range p.steps[i+1:] {
-				for j, right := range p.right[offset : offset+next.length] {
+				for j, right := range p.right[next.start : next.start+next.length] {
 					switch {
-					case right == length:
-						p.right[offset+j] = -1
-						offset += next.length
+					case right == length+1:
+						p.right[next.start+j] = -1
 						length++
 						continue gobble
 					case right > length:
@@ -63,9 +92,8 @@ func (p *Pairs) BuildFragments(left *Document, windowSize, minLength int) (Fragm
 				}
 				break gobble
 			}
-			buildFragment(step.left, r, length)
+			buildFragment(int(step.left), int(r), int(length))
 		}
-		counter += step.length
 	}
 	sort.Sort(fragments)
 	return fragments, themes

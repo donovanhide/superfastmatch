@@ -14,8 +14,6 @@ import (
 )
 
 type MetaMap map[string]interface{}
-type HashSet map[uint64]struct{}
-type IntersectionMap map[uint64]PositionSlice
 
 type HashKey struct {
 	WindowSize uint64
@@ -40,7 +38,6 @@ type Document struct {
 	Meta           MetaMap       `json:"metaData,omitempty"`
 	Associations   *Associations `json:",omitempty"`
 	hashes         map[HashKey][]uint64
-	hashsets       map[BloomKey]HashSet
 	blooms         map[BloomKey]Bloom
 	normalisedText *utf8string.String
 }
@@ -82,7 +79,6 @@ func (d *Document) String() string {
 
 func (d *Document) init() *Document {
 	d.hashes = make(map[HashKey][]uint64)
-	d.hashsets = make(map[BloomKey]HashSet)
 	d.blooms = make(map[BloomKey]Bloom)
 	return d
 }
@@ -150,7 +146,9 @@ func (d *Document) AddAssociation(registry *registry.Registry, other *Document, 
 		d.Associations = &Associations{}
 	}
 	association, themes := BuildAssociation(registry.WindowSize, d, other)
-	d.Associations.Documents = append(d.Associations.Documents, *association)
+	if len(association.Fragments) > 0 {
+		d.Associations.Documents = append(d.Associations.Documents, *association)
+	}
 	if saveThemes {
 		themes.Save(registry)
 	}
@@ -164,60 +162,65 @@ func (d *Document) NormalisedText() *utf8string.String {
 	return d.normalisedText
 }
 
+func (d *Document) runHasher(length uint64, key HashKey, f streamFunc) {
+	rollingRabinKarp3(d.NormalisedText().String(), length, key, f)
+}
+
+func (d *Document) HashLength(key HashKey) uint64 {
+	if d.Length > key.WindowSize {
+		return d.Length - key.WindowSize + 1
+	}
+	return 0
+}
+
 func (d *Document) Hashes(key HashKey) []uint64 {
 	hashes, ok := d.hashes[key]
 	if ok {
 		return hashes
 	}
-	length := d.Length - key.WindowSize + 1
+	length := d.HashLength(key)
 	if length > 0 {
-		hashes = rollingRabinKarp3(d.NormalisedText().String(), length, key)
+		hashes = make([]uint64, length)
+		f := func(i int, h uint64) {
+			hashes[i] = h
+		}
+		d.runHasher(length, key, f)
 	}
 	d.hashes[key] = hashes
 	return hashes
 }
 
-func (d *Document) Common(other *Document, hashKey HashKey) *Pairs {
-	bloomKey := BloomKey{
-		HashKey: hashKey,
-		Size:    d.Length,
-	}
-	hashes, bloom := d.HashSetAndBloom(bloomKey)
-	inter, interBloom := make(IntersectionMap), NewFixedBloom(d.Length, 0.9)
-	for i, h := range other.Hashes(hashKey) {
-		if bloom.Test(h) {
-			if _, ok := hashes[h]; ok {
-				inter[h] = append(inter[h], i)
-				interBloom.Set(h)
+func (d *Document) InvertedSlice(key HashKey, bloom Bloom) InvertedSlice {
+	length := d.HashLength(key)
+	if length > 0 {
+		inverted := make(InvertedSlice, 0, bloom.Count())
+		f := func(i int, h uint64) {
+			if bloom.Test(h) {
+				inverted = append(inverted, Inverted{uint32(h), int32(i)})
 			}
 		}
+		d.runHasher(length, key, f)
+		return inverted
 	}
-	pairs := NewPairs(len(inter))
-	for i, h := range d.Hashes(hashKey) {
-		if interBloom.Test(h) {
-			if positions, ok := inter[h]; ok {
-				pairs.Append(i, positions)
-			}
-		}
-	}
-	return pairs
+	return nil
 }
 
-func (d *Document) HashSetAndBloom(key BloomKey) (HashSet, Bloom) {
-	hashset, ok := d.hashsets[key]
+func (d *Document) Bloom(key BloomKey) Bloom {
+	bloom, ok := d.blooms[key]
 	if ok {
-		return hashset, d.blooms[key]
+		return bloom
 	}
-	bloom := NewFixedBloom(key.Size, 0.1)
-	ws := whiteSpaceHash(key.HashKey)
-	hashset = make(HashSet)
-	for _, h := range d.Hashes(key.HashKey) {
-		if h != ws {
-			hashset[h] = struct{}{}
-			bloom.Set(h)
+	length := d.HashLength(key.HashKey)
+	if length > 0 {
+		bloom = NewFixedBloom(key.Size, 0.1)
+		ws := whiteSpaceHash(key.HashKey)
+		f := func(i int, h uint64) {
+			if h != ws {
+				bloom.Set(h)
+			}
 		}
+		d.runHasher(length, key.HashKey, f)
 	}
-	d.hashsets[key] = hashset
 	d.blooms[key] = bloom
-	return hashset, bloom
+	return bloom
 }

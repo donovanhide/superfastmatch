@@ -39,10 +39,14 @@ func benchmarkHasher(b *testing.B, hasher HasherFunc, paths []string) {
 	for _, path := range paths {
 		text := openFile(path)
 		count := uint64(utf8.RuneCountInString(text))
+		hashes := make([]uint64, count)
+		f := func(i int, h uint64) {
+			hashes[i] = h
+		}
 		b.Logf("Benchmarking file %v (%v...)", path, text[:20])
 		b.StartTimer()
 		for i := 0; i < b.N; i++ {
-			hasher(text, count, key)
+			hasher(text, count, key, f)
 		}
 		b.StopTimer()
 		byteCount += int64(len(text) * b.N)
@@ -62,7 +66,11 @@ func testHasher(t *testing.T, hasher HasherFunc) {
 	text := "Text gobble! Text"
 	count := uint64(utf8.RuneCountInString(text) - 3)
 	key := HashKey{WindowSize: 4, HashWidth: 10}
-	hashes := hasher(text, count, key)
+	hashes := make([]uint64, count)
+	f := func(i int, h uint64) {
+		hashes[i] = h
+	}
+	hasher(text, count, key, f)
 	if len(hashes) != 14 {
 		t.Errorf("Wrong number of hashes: %v", hashes)
 	}

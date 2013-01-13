@@ -16,7 +16,7 @@ type DocumentArg struct {
 type SearchResult struct {
 	Success      bool          `json:"success"`
 	TotalRows    int           `json:"totalRows"`
-	Associations []Association `json:"documents"`
+	Associations []Association `json:"documents,omitempty"`
 }
 
 type Tally struct {
@@ -124,10 +124,12 @@ func (s *SearchGroup) GetResult(registry *registry.Registry, d *DocumentArg) (*S
 		return nil, err
 	}
 	s.Merge().Fill(registry, doc)
-	result := &SearchResult{
+	if doc.Associations == nil {
+		return &SearchResult{}, nil
+	}
+	return &SearchResult{
 		Success:      true,
 		TotalRows:    len(doc.Associations.Documents),
 		Associations: doc.Associations.Documents,
-	}
-	return result, nil
+	}, nil
 }
