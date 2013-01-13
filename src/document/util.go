@@ -95,13 +95,14 @@ func initialHash(text string, windowSize uint64) (high, hash uint64, offset int,
 	b, j := bases[windowSize], 0
 	high = b[0]
 	for i, r := range text {
+		if j == int(windowSize) {
+			offset = i
+			break
+		}
 		previous[j] = uint64(r)
 		hash += uint64(r) * b[j]
 		j++
-		if j == int(windowSize) {
-			offset = i + 1
-			break
-		}
+
 	}
 	return
 }

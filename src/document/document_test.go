@@ -4,6 +4,15 @@ import (
 	"testing"
 )
 
+func Test_4598(t *testing.T) {
+	doc, _ := BuildDocument(0, 0, "4598", openFile("../../fixtures/4598.txt.gz"), nil)
+	key := HashKey{WindowSize: 30, HashWidth: 32}
+	length := len(doc.Hashes(key))
+	if length != 306153 {
+		t.Errorf("Wrong number of hashes: %v", length)
+	}
+}
+
 func Test_NormalisedText(t *testing.T) {
 	doc1, _ := BuildDocument(1, 1, "This is a test", "This is some text,!&", nil)
 	doc2, _ := BuildDocument(1, 1, "This is a test", "THIS IS SOME TEXT   ", nil)
