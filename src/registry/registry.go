@@ -80,6 +80,7 @@ func (r *Registry) Open() {
 	r.WindowSize = uint64(r.flags.WindowSize)
 	r.db = r.flags.Db
 	r.session, err = mgo.Dial(r.flags.MongoUrl)
+	// r.session.SetMode(mgo.Strong, true)
 	checkErr(err)
 	if r.Mode == "posting" || r.Mode == "standalone" {
 		r.PostingListeners = make([]net.Listener, len(r.flags.PostingAddresses))

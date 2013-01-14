@@ -3,77 +3,113 @@ package queue
 import (
 	"document"
 	"errors"
+	"fmt"
 	"log"
 	"posting"
 	"registry"
 )
 
-func (item *QueueItem) Execute(registry *registry.Registry, client *posting.Client) error {
-	var err error
-	switch item.Command {
-	case "Add Document":
-		err = AddDocument(item, registry, client)
-	case "Delete Document":
-		err = DeleteDocument(item, registry, client)
-	case "Test Corpus":
-		err = TestCorpus(item, registry, client)
-	default:
-		err = errors.New("Command does not exist!")
-	}
-	if err != nil {
-		item.Status = "Failed"
-		item.Error = err.Error()
-		log.Printf("Failed Queue Item: %v Error: %s", item, err.Error())
-	} else {
-		item.Status = "Completed"
-		item.Payload = []byte(nil)
-		log.Printf("Completed Queue Item: %v", item)
-	}
-	return item.Save(registry)
+type QueueItemRun struct {
+	item *QueueItem
+	err  error
 }
 
-func AddDocument(item *QueueItem, registry *registry.Registry, client *posting.Client) error {
+type commandFunc func(item *QueueItem, registry *registry.Registry, client *posting.Client, c chan *QueueItemRun)
+
+var commandMap = map[string]commandFunc{
+	"Add Document":    AddDocument,
+	"Delete Document": DeleteDocument,
+	"Test Corpus":     TestCorpus,
+}
+
+func runFailure(item *QueueItem, s string, err error) *QueueItemRun {
+	return &QueueItemRun{item, errors.New(fmt.Sprintf("%s: %s", s, err))}
+}
+
+func runSuccess(item *QueueItem) *QueueItemRun {
+	return &QueueItemRun{item, nil}
+}
+
+func (items QueueItemSlice) Execute(registry *registry.Registry, client *posting.Client) error {
+	c := make(chan *QueueItemRun, len(items))
+	for i := range items {
+		item := &items[i]
+		f, ok := commandMap[item.Command]
+		if !ok {
+			return errors.New("Command does not exist!")
+		}
+		if err := item.UpdateStatus(registry, "Started"); err != nil {
+			return err
+		}
+		go f(item, registry, client, c)
+	}
+	for i := 0; i < len(items); i++ {
+		run := <-c
+		if run.err != nil {
+			run.item.Status = "Failed"
+			run.item.Error = run.err.Error()
+			log.Printf("Failed Queue Item: %v Error: %s", run.item, run.err)
+		} else {
+			run.item.Status = "Completed"
+			run.item.Payload = []byte(nil)
+		}
+		if err := run.item.Save(registry); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func AddDocument(item *QueueItem, registry *registry.Registry, client *posting.Client, c chan *QueueItemRun) {
 	values, err := item.PayloadValues()
 	if err != nil {
-		return err
+		c <- runFailure(item, "Get Payload", err)
+		return
 	}
 	doc, err := document.NewDocument(item.Target, values)
 	if err != nil {
-		return err
+		c <- runFailure(item, "New Document", err)
+		return
 	}
 	if err = doc.Save(registry); err != nil {
-		return err
+		c <- runFailure(item, "Save Document", err)
+		return
 	}
 	if err = client.CallMultiple("Posting.Add", &document.DocumentArg{Id: &doc.Id}); err != nil {
-		return err
+		c <- runFailure(item, "RPC Call", err)
+		return
 	}
-	return nil
+	c <- runSuccess(item)
 }
 
-func DeleteDocument(item *QueueItem, registry *registry.Registry, client *posting.Client) error {
+func DeleteDocument(item *QueueItem, registry *registry.Registry, client *posting.Client, c chan *QueueItemRun) {
 	doc, err := document.GetDocument(item.Target, registry)
 	if err != nil {
-		return err
+		c <- runFailure(item, "Get Document", err)
+		return
 	}
 	if err = client.CallMultiple("Posting.Delete", &document.DocumentArg{Id: &doc.Id}); err != nil {
-		return err
+		c <- runFailure(item, "RPC Call", err)
+		return
 	}
 	if err = doc.Delete(registry); err != nil {
-		return err
+		c <- runFailure(item, "Delete Document", err)
+		return
 	}
-	return nil
+	c <- runSuccess(item)
 }
 
-func TestCorpus(item *QueueItem, registry *registry.Registry, client *posting.Client) error {
+func TestCorpus(item *QueueItem, registry *registry.Registry, client *posting.Client, c chan *QueueItemRun) {
 	docs := document.BuildTestCorpus(10, 20, 500)
 	for doc := <-docs; doc != nil; doc = <-docs {
-		err := doc.Save(registry)
-		if err != nil {
-			return err
+		if err := doc.Save(registry); err != nil {
+			c <- runFailure(item, "Save Document", err)
+			return
 		}
-		if err = client.CallMultiple("Posting.Add", &document.DocumentArg{Id: &doc.Id}); err != nil {
-			return err
+		if err := client.CallMultiple("Posting.Add", &document.DocumentArg{Id: &doc.Id}); err != nil {
+			c <- runFailure(item, "RPC Call", err)
+			return
 		}
 	}
-	return nil
+	c <- runSuccess(item)
 }

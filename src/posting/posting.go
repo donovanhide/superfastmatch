@@ -2,24 +2,30 @@ package posting
 
 import (
 	"document"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"query"
 	"registry"
 	"sparsetable"
+	"sync"
 	"time"
 )
 
 type Posting struct {
-	logger      *log.Logger
-	initialised bool
-	hashKey     document.HashKey
-	offset      uint64
-	size        uint64
-	documents   uint64
-	registry    *registry.Registry
-	table       *sparsetable.SparseTable
+	logger    *log.Logger
+	lock      sync.RWMutex
+	hashKey   document.HashKey
+	offset    uint64
+	size      uint64
+	documents uint64
+	registry  *registry.Registry
+	table     *sparsetable.SparseTable
+}
+
+func newPostingError(s string, err error) error {
+	return errors.New(fmt.Sprint(s, err))
 }
 
 func newPosting(registry *registry.Registry, prefix string) *Posting {
@@ -29,128 +35,132 @@ func newPosting(registry *registry.Registry, prefix string) *Posting {
 	}
 }
 
-func (p *Posting) remove(doc *document.Document) error {
-	start := time.Now()
-	hashes := doc.Hashes(p.hashKey)
-	count, dupes, set, saturated := 0, 0, 0, 0
+const (
+	Add = iota
+	Delete
+)
+
+type Stats struct {
+	doc       *document.Document
+	start     time.Time
+	length    uint64
+	count     int
+	dupes     int
+	ops       int
+	saturated int
+}
+
+func (s *Stats) Valid() bool {
+	return (s.ops + s.dupes) == s.count
+}
+
+func (s *Stats) String() string {
+	return fmt.Sprintf("%v Hashes: %v/%v Ignored: %.2f%% Saturated: %.2f%% Dupes: %.2f%% Speed: %.0f hashes/sec",
+		s.doc.Id.String(),
+		s.ops,
+		s.length,
+		(float64(1)-(float64(s.count)/float64(s.length)))*100,
+		(float64(s.saturated)/float64(s.count))*100,
+		(float64(s.dupes)/float64(s.count))*100,
+		float64(s.ops)/time.Now().Sub(s.start).Seconds())
+}
+
+func (p *Posting) alter(operation int, doc *document.Document) (err error) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
 	l := NewPostingLine()
-	for _, hash := range hashes {
+	stats := &Stats{
+		doc:    doc,
+		start:  time.Now(),
+		length: doc.HashLength(p.hashKey),
+	}
+	alterFunc := func(i int, hash uint64) {
 		pos := hash - p.offset
 		if pos >= p.size {
-			continue
+			return
 		}
-		count++
+		stats.count++
 		if err := p.table.Get(pos, l); err != nil {
-			return err
+			panic(newPostingError("Add Document: Sparsetable Get:", err))
 		}
-		if !l.RemoveDocumentId(&doc.Id) {
-			dupes++
-			continue
+		switch operation {
+		case Add:
+			if !l.AddDocumentId(&doc.Id) {
+				stats.dupes++
+				return
+			}
+		case Delete:
+			if !l.RemoveDocumentId(&doc.Id) {
+				stats.dupes++
+				return
+			}
 		}
 		if err := p.table.Set(pos, l, l.Length); err != nil {
 			if serr, ok := err.(*sparsetable.Error); ok {
 				switch {
 				case serr.Full:
-					saturated++
+					stats.saturated++
 				case serr.ShortRead:
 					p.logger.Printf("Short Read for Document: %v Length: %v\n%v", doc.Id.String(), l.Length, l.String(true))
 				default:
-					return err
+					panic(newPostingError("Add Document: Sparsetable Set:", err))
 				}
 			}
 		}
-		set++
+		stats.ops++
 	}
-	if (set + dupes) != count {
-		panic(fmt.Sprintln(count, dupes, set))
+	doc.ApplyHasher(p.hashKey, alterFunc)
+	switch operation {
+	case Add:
+		p.logger.Println("Added Document: ", stats.String())
+		p.documents++
+	case Delete:
+		p.logger.Println("Deleted Document: ", stats.String())
+		p.documents--
 	}
-	p.logger.Printf("Removed Document: %v Hashes: %v/%v Ignored: %.2f%% Saturated: %.2f%% Dupes: %.2f%% Speed: %.0f hashes/sec",
-		doc.Id.String(),
-		set,
-		len(hashes),
-		(float64(1)-(float64(count)/float64(len(hashes))))*100,
-		(float64(saturated)/float64(set))*100,
-		(float64(dupes)/float64(set))*100,
-		float64(set)/time.Now().Sub(start).Seconds())
-	p.documents--
 	return nil
 }
 
-func (p *Posting) add(doc *document.Document) error {
-	start := time.Now()
-	hashes := doc.Hashes(p.hashKey)
-	count, dupes, set, saturated := 0, 0, 0, 0
+func (p *Posting) search(doc *document.Document, results *document.SearchMap) (err error) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+	stats := &Stats{
+		doc:    doc,
+		start:  time.Now(),
+		length: doc.HashLength(p.hashKey),
+	}
 	l := NewPostingLine()
-	for _, hash := range hashes {
-		pos := hash - p.offset
-		if pos >= p.size {
-			continue
-		}
-		count++
-		if err := p.table.Get(pos, l); err != nil {
-			return err
-		}
-		if !l.AddDocumentId(&doc.Id) {
-			dupes++
-			continue
-		}
-		if err := p.table.Set(pos, l, l.Length); err != nil {
-			if serr, ok := err.(*sparsetable.Error); ok {
-				switch {
-				case serr.Full:
-					saturated++
-				case serr.ShortRead:
-					p.logger.Printf("Short Read for Document: %v Length: %v\n%v", doc.Id.String(), l.Length, l.String(true))
-				default:
-					return err
-				}
-			}
-		}
-		set++
-	}
-	if (set + dupes) != count {
-		panic(fmt.Sprintln(count, dupes, set))
-	}
-	p.logger.Printf("Added Document: %v Hashes: %v/%v Ignored: %.2f%% Saturated: %.2f%% Dupes: %.2f%% Speed: %.0f hashes/sec",
-		doc.Id.String(),
-		set,
-		len(hashes),
-		(float64(1)-(float64(count)/float64(len(hashes))))*100,
-		(float64(saturated)/float64(set))*100,
-		(float64(dupes)/float64(set))*100,
-		float64(set)/time.Now().Sub(start).Seconds())
-	p.documents++
-	return nil
-}
-
-func (p *Posting) search(doc *document.Document, results *document.SearchMap) error {
-	start := time.Now()
 	*results = make(document.SearchMap)
-	hashes := doc.Hashes(p.hashKey)
-	count := 0
-	l := NewPostingLine()
-	for i, hash := range hashes {
+	searchFunc := func(i int, hash uint64) {
 		pos := hash - p.offset
 		if pos >= p.size {
-			continue
+			return
 		}
-		count++
+		stats.count++
 		if err := p.table.Get(pos, l); err != nil {
-			return err
+			panic(newPostingError("Search Document: Sparsetable Get:", err))
 		}
+		stats.ops++
 		l.FillMap(results, uint32(i))
 	}
-	p.logger.Printf("Searched Document: %v Hashes: %v/%v Ignored: %.2f%% Speed: %.0f hashes/sec",
-		doc.Id.String(),
-		count,
-		len(hashes),
-		(float64(1)-(float64(count)/float64(len(hashes))))*100,
-		float64(count)/time.Now().Sub(start).Seconds())
+	doc.ApplyHasher(p.hashKey, searchFunc)
+	p.logger.Println("Searched Document: ", stats.String())
 	return nil
 }
 
-func (p *Posting) Init(conf *registry.PostingConfig, reply *bool) error {
-	p.initialised = false
+func (p *Posting) init(conf *registry.PostingConfig, c chan *document.Document) error {
+	p.lock.Lock()
+	start := time.Now()
 	p.table = sparsetable.Init(conf.Size, conf.GroupSize)
 	p.hashKey = document.HashKey{
 		HashWidth:  conf.HashWidth,
@@ -158,45 +168,50 @@ func (p *Posting) Init(conf *registry.PostingConfig, reply *bool) error {
 	}
 	p.offset = conf.Offset
 	p.size = conf.Size
-	p.logger.Printf("Initialising Posting Server with Offset: %v Size: %v %v ", p.offset, p.size, p.hashKey)
-	docids, err := query.GetDocids(conf.InitialQuery, p.registry)
-	if err != nil {
-		return err
-	}
-	p.logger.Printf("Loading %v documents", len(docids))
-	c := document.GetDocuments(docids, p.registry)
+	p.logger.Printf("Initialising Posting Server with %v Size: %d Offset: %d", p.hashKey.String(), p.size, p.offset)
 	for doc := range c {
-		if err = p.add(doc); err != nil {
-			return err
+		if err := p.alter(Add, doc); err != nil {
+			return newPostingError("Init:", err)
 		}
 	}
-	// expvar.Publish("table", expvar.Func(func() interface{} { return p.table.Stats() }))
-	// expvar.Publish("posting", expvar.Func(func() interface{} { return p.stats() }))
-	p.initialised = true
-	p.logger.Println("Posting Server Initialised")
+	duration, average := time.Now().Sub(start).Seconds(), 0.0
+	if p.documents > 0 {
+		average = duration / float64(p.documents)
+	}
+	p.logger.Printf("Posting Server Initialised with %v documents in %.2f secs Average: %.2f secs/doc", p.documents, duration, average)
+	p.lock.Unlock()
 	return nil
+}
+
+func (p *Posting) Init(conf *registry.PostingConfig, reply *bool) error {
+	docids, err := query.GetDocids(conf.InitialQuery, p.registry)
+	if err != nil {
+		return newPostingError("Get Document:", err)
+	}
+	c := document.GetDocuments(docids, p.registry)
+	return p.init(conf, c)
 }
 
 func (p *Posting) Add(arg *document.DocumentArg, _ *struct{}) error {
 	doc, err := arg.GetDocument(p.registry)
 	if err != nil {
-		return err
+		return newPostingError("Add Document:", err)
 	}
-	return p.add(doc)
+	return p.alter(Add, doc)
 }
 
 func (p *Posting) Delete(arg *document.DocumentArg, _ *struct{}) error {
 	doc, err := arg.GetDocument(p.registry)
 	if err != nil {
-		return err
+		return newPostingError("Delete Document:", err)
 	}
-	return p.remove(doc)
+	return p.alter(Delete, doc)
 }
 
 func (p *Posting) Search(arg *document.DocumentArg, result *document.SearchMap) error {
 	doc, err := arg.GetDocument(p.registry)
 	if err != nil {
-		return err
+		return newPostingError("Search Document:", err)
 	}
 	return p.search(doc, result)
 }
@@ -210,6 +225,7 @@ func (p *Posting) List(in Query, out *Query) error {
 	}
 	end := p.offset + p.size
 	l := NewPostingLine()
+	p.lock.RLock()
 	for out.Start < end && out.Limit > 0 {
 		err := p.table.Get(out.Start-p.offset, l)
 		if err != nil {
@@ -237,13 +253,6 @@ func (p *Posting) List(in Query, out *Query) error {
 		out.Limit--
 	}
 	out.Result.TotalRows += p.table.Count()
+	p.lock.RUnlock()
 	return nil
-}
-
-func (p *Posting) stats() interface{} {
-	return map[string]uint64{
-		"offset":    p.offset,
-		"size":      p.size,
-		"documents": p.documents,
-	}
 }

@@ -15,8 +15,8 @@ var bases = make([][]uint64, maxWindowSize+1)
 var words []string
 var whiteSpaceHashes = make(map[HashKey]uint64, maxWindowSize+1)
 
-type streamFunc func(i int, h uint64)
-type HasherFunc func(text string, length uint64, key HashKey, f streamFunc)
+type StreamFunc func(i int, h uint64)
+type HasherFunc func(text string, length uint64, key HashKey, f StreamFunc)
 
 func init() {
 	bases[0] = []uint64{}
@@ -55,7 +55,7 @@ func mix(h uint32) uint32 {
 	return h
 }
 
-func rollingRabinKarp(text string, length uint64, key HashKey, f streamFunc) {
+func rollingRabinKarp(text string, length uint64, key HashKey, f StreamFunc) {
 	const base uint64 = 37
 	windowSize := key.WindowSize
 	hashWidth := key.HashWidth
@@ -107,7 +107,7 @@ func initialHash(text string, windowSize uint64) (high, hash uint64, offset int,
 	return
 }
 
-func buildHashes(text string, length, windowSize, hashWidth, high, hash uint64, previous []uint64, f streamFunc) {
+func buildHashes(text string, length, windowSize, hashWidth, high, hash uint64, previous []uint64, f StreamFunc) {
 	prev, hashMask := 0, uint64(1<<hashWidth)-1
 	f(0, ((hash>>hashWidth)^hash)&hashMask)
 	i, limit := 1, len(previous)
@@ -124,7 +124,7 @@ func buildHashes(text string, length, windowSize, hashWidth, high, hash uint64, 
 	}
 }
 
-func rollingRabinKarp3(text string, length uint64, key HashKey, f streamFunc) {
+func rollingRabinKarp3(text string, length uint64, key HashKey, f StreamFunc) {
 	high, hash, offset, previous := initialHash(text, key.WindowSize)
 	buildHashes(text[offset:], length, key.WindowSize, key.HashWidth, high, hash, previous, f)
 }

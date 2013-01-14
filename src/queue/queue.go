@@ -1,9 +1,11 @@
 package queue
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"document"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -17,6 +19,10 @@ import (
 	"time"
 )
 
+func newQueueError(s string, err error) error {
+	return errors.New(fmt.Sprint(s, err))
+}
+
 type QueueItem struct {
 	Id          bson.ObjectId              `bson:"_id"`
 	Command     string                     `bson:"command"`
@@ -29,15 +35,21 @@ type QueueItem struct {
 	Payload     []byte                     `bson:"payload"`
 }
 
+type QueueItemSlice []QueueItem
+
 func NewQueueItem(registry *registry.Registry, command string,
 	source *document.DocumentID, target *document.DocumentID,
 	sourceRange *query.DocumentQueryParams, targetRange *query.DocumentQueryParams,
 	payload io.Reader) (*QueueItem, error) {
-	var buf = new(bytes.Buffer)
+	buf := new(bytes.Buffer)
 	w, _ := gzip.NewWriterLevel(buf, gzip.BestSpeed)
-	io.Copy(w, payload)
-	w.Close()
-	item := QueueItem{
+	if _, err := io.Copy(w, payload); err != nil {
+		return nil, newQueueError("Queue Item gzip copy:", err)
+	}
+	if err := w.Close(); err != nil {
+		return nil, newQueueError("Queue Item gzip close:", err)
+	}
+	item := &QueueItem{
 		Id:          bson.NewObjectId(),
 		Command:     command,
 		Status:      "Queued",
@@ -47,11 +59,10 @@ func NewQueueItem(registry *registry.Registry, command string,
 		TargetRange: targetRange,
 		Payload:     buf.Bytes(),
 	}
-	err := item.Save(registry)
-	if err != nil {
-		return nil, err
+	if err := item.Save(registry); err != nil {
+		return nil, newQueueError("Queue Item save:", err)
 	}
-	return &item, err
+	return item, nil
 }
 
 func (q *QueueItem) Save(registry *registry.Registry) error {
@@ -59,14 +70,19 @@ func (q *QueueItem) Save(registry *registry.Registry) error {
 	return err
 }
 
+func (q *QueueItem) UpdateStatus(registry *registry.Registry, status string) error {
+	return registry.C("queue").UpdateId(q.Id, bson.M{"$set": bson.M{"status": status}})
+}
+
 func (q *QueueItem) getPayload() (string, error) {
-	r, err := gzip.NewReader(bytes.NewReader(q.Payload))
+	buf := bufio.NewReader(bytes.NewBuffer(q.Payload))
+	r, err := gzip.NewReader(buf)
 	if err != nil {
-		return "", err
+		return "", newQueueError("Queue Item Get Payload:", err)
 	}
 	b, err := ioutil.ReadAll(r)
 	if err != nil {
-		return "", err
+		return "", newQueueError("Queue Item Read Payload:", err)
 	}
 	return string(b), nil
 }
@@ -74,11 +90,11 @@ func (q *QueueItem) getPayload() (string, error) {
 func (q *QueueItem) PayloadValues() (*url.Values, error) {
 	payload, err := q.getPayload()
 	if err != nil {
-		return nil, err
+		return nil, newQueueError("Queue Item Get Payload Values:", err)
 	}
 	values, err := url.ParseQuery(payload)
 	if err != nil {
-		return nil, err
+		return nil, newQueueError("Queue Item Parse Payload Values:", err)
 	}
 	return &values, nil
 }
@@ -106,12 +122,11 @@ func Start(registry *registry.Registry) {
 	quit := make(chan bool)
 	registry.Queue = &quit
 	client, err := posting.NewClient(registry)
+	defer client.Close()
 	if err != nil {
 		panic(err)
 	}
-	defer client.Close()
-	err = client.Initialise()
-	if err != nil {
+	if err = client.Initialise(); err != nil {
 		panic(err)
 	}
 	queue := registry.C("queue")
@@ -120,16 +135,23 @@ func Start(registry *registry.Registry) {
 		case <-*registry.Queue:
 			log.Println("Queue Processor Stopped")
 			return
-		case <-time.After(1 * time.Second):
-			var item QueueItem
-			iter := queue.Find(bson.M{"status": "Queued"}).Sort("_id").Iter()
-			for iter.Next(&item) {
-				if err := item.Execute(registry, client); err != nil {
-					panic(err)
+		case <-time.After(time.Second * 2):
+			start := time.Now()
+			var items QueueItemSlice
+			if err := queue.Find(bson.M{"status": "Queued"}).Sort("_id").Limit(10).All(&items); err != nil {
+				panic(err)
+			}
+			for i, item := range items {
+				if item.Command != items[0].Command {
+					items = items[:i]
+					break
 				}
 			}
-			if iter.Err() != nil {
-				panic(iter.Err())
+			if err := items.Execute(registry, client); err != nil {
+				log.Println(err)
+			}
+			if len(items) > 0 {
+				log.Printf("Executed %d Queue items in %.2f secs", len(items), time.Now().Sub(start).Seconds())
 			}
 		}
 	}
@@ -146,7 +168,7 @@ func Stats(registry *registry.Registry) (map[string]int, error) {
 	}
 	_, err := registry.C("queue").Find(nil).MapReduce(job, &result)
 	if err != nil {
-		return nil, err
+		return nil, newQueueError("Queue Map Reduce Stats:", err)
 	}
 	stats := make(map[string]int)
 	for _, item := range result {

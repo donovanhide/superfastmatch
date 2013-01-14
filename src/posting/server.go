@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/rpc"
 	"registry"
-	// "strings"
 )
 
 func serve(registry *registry.Registry, l *net.Listener) {

@@ -162,7 +162,7 @@ func (d *Document) NormalisedText() *utf8string.String {
 	return d.normalisedText
 }
 
-func (d *Document) runHasher(length uint64, key HashKey, f streamFunc) {
+func (d *Document) runHasher(length uint64, key HashKey, f StreamFunc) {
 	rollingRabinKarp3(d.NormalisedText().String(), length, key, f)
 }
 
@@ -171,6 +171,10 @@ func (d *Document) HashLength(key HashKey) uint64 {
 		return d.Length - key.WindowSize + 1
 	}
 	return 0
+}
+
+func (d *Document) ApplyHasher(key HashKey, f StreamFunc) {
+	d.runHasher(d.HashLength(key), key, f)
 }
 
 func (d *Document) Hashes(key HashKey) []uint64 {
