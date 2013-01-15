@@ -35,6 +35,7 @@ type Registry struct {
 	Routines         sync.WaitGroup
 	Queue            chan bool
 	ApiListener      net.Listener
+	ApiAddress       string
 	PostingListeners []net.Listener
 	PostingConfigs   []PostingConfig
 	session          *mgo.Session
@@ -80,6 +81,7 @@ func (r *Registry) Open() {
 	r.HashWidth = uint64(r.flags.HashWidth)
 	r.WindowSize = uint64(r.flags.WindowSize)
 	r.session, err = mgo.Dial(r.flags.MongoUrl)
+	r.ApiAddress = r.flags.ApiAddress
 	checkErr(err)
 	if r.Mode == "posting" || r.Mode == "standalone" {
 		r.PostingListeners = make([]net.Listener, len(r.flags.PostingAddresses))
