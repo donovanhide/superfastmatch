@@ -63,13 +63,16 @@ func parseFlags(args []string) *flags {
 }
 
 func parseMode(args []string) (string, []string) {
-	switch {
-	case len(args) == 1:
+	if len(args) == 1 {
 		return "standalone", []string{}
-	case args[1] == "api":
+	}
+	switch args[1] {
+	case "api":
 		return "api", args[2:]
-	case args[1] == "posting":
+	case "posting":
 		return "posting", args[2:]
+	case "add", "delete", "associate", "switch":
+		return "client", args[1:]
 	}
 	return "standalone", args[1:]
 }
@@ -80,7 +83,6 @@ func (r *Registry) Open() {
 	r.WindowSize = uint64(r.flags.WindowSize)
 	r.db = r.flags.Db
 	r.session, err = mgo.Dial(r.flags.MongoUrl)
-	// r.session.SetMode(mgo.Strong, true)
 	checkErr(err)
 	if r.Mode == "posting" || r.Mode == "standalone" {
 		r.PostingListeners = make([]net.Listener, len(r.flags.PostingAddresses))

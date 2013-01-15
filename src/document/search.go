@@ -2,15 +2,18 @@ package document
 
 import (
 	"bytes"
+	"code.google.com/p/gorilla/schema"
 	"fmt"
+	"net/url"
 	"registry"
 	"sort"
 	"time"
 )
 
 type DocumentArg struct {
-	Id   *DocumentID
-	Text string
+	Id    *DocumentID
+	Text  string `schema:"text"`
+	Limit int    `schema:"limit"`
 }
 
 type SearchResult struct {
@@ -29,6 +32,17 @@ type Match struct {
 	Count     uint64
 	SumDeltas uint64
 	Id        DocumentID
+}
+
+var decoder = schema.NewDecoder()
+
+func NewDocumentArg(values url.Values) *DocumentArg {
+	d := &DocumentArg{
+		Limit: 10,
+	}
+	decoder.Decode(d, values)
+	// fmt.Println(d, values)
+	return d
 }
 
 func (a *DocumentArg) GetDocument(registry *registry.Registry) (*Document, error) {
@@ -67,7 +81,7 @@ type SearchMap map[DocumentID]*Tally
 
 type SearchGroup []SearchMap
 
-func (s *SearchGroup) Merge() *MatchSlice {
+func (s *SearchGroup) Merge() MatchSlice {
 	merged := make(SearchMap)
 	for i, _ := range *s {
 		for k, v := range (*s)[i] {
@@ -91,7 +105,7 @@ func (s *SearchGroup) Merge() *MatchSlice {
 		i++
 	}
 	sort.Sort(matches)
-	return &matches
+	return matches
 }
 
 func (m *MatchSlice) String() string {
@@ -102,12 +116,12 @@ func (m *MatchSlice) String() string {
 	return out.String()
 }
 
-func (m *MatchSlice) Fill(registry *registry.Registry, doc *Document) {
+func (m MatchSlice) Fill(registry *registry.Registry, doc *Document) {
 	fills := make(map[DocumentID]*Match)
-	docids := make([]DocumentID, len(*m))
-	for i, _ := range *m {
-		docids[i] = (*m)[i].Id
-		fills[(*m)[i].Id] = &(*m)[i]
+	docids := make([]DocumentID, len(m))
+	for i, _ := range m {
+		docids[i] = m[i].Id
+		fills[m[i].Id] = &m[i]
 	}
 	searchStart := time.Now()
 	for other := range GetDocuments(docids, registry) {
@@ -123,7 +137,11 @@ func (s *SearchGroup) GetResult(registry *registry.Registry, d *DocumentArg) (*S
 	if err != nil {
 		return nil, err
 	}
-	s.Merge().Fill(registry, doc)
+	results := s.Merge()
+	if d.Limit < len(results) {
+		results = results[:d.Limit]
+	}
+	results.Fill(registry, doc)
 	if doc.Associations == nil {
 		return &SearchResult{}, nil
 	}

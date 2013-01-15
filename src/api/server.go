@@ -88,7 +88,7 @@ func indexHandler(rw http.ResponseWriter, req *http.Request) *appError {
 
 func searchHandler(rw http.ResponseWriter, req *http.Request) *appError {
 	fillValues(req)
-	search := &document.DocumentArg{Text: req.Form.Get("text")}
+	search := document.NewDocumentArg(req.Form)
 	rows, err := c.Search(search)
 	if err != nil {
 		return &appError{err, "Search problem", 500}

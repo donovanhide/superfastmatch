@@ -130,12 +130,14 @@ func Start(registry *registry.Registry) {
 		panic(err)
 	}
 	queue := registry.C("queue")
+	ticker := time.NewTicker(time.Second)
 	for {
 		select {
 		case <-*registry.Queue:
+			ticker.Stop()
 			log.Println("Queue Processor Stopped")
 			return
-		case <-time.After(time.Second * 2):
+		case <-ticker.C:
 			start := time.Now()
 			var items QueueItemSlice
 			if err := queue.Find(bson.M{"status": "Queued"}).Sort("_id").Limit(10).All(&items); err != nil {
