@@ -39,5 +39,4 @@ func main() {
 		}
 		<-sig
 	}
-
 }

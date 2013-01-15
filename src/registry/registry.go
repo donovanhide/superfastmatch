@@ -33,11 +33,10 @@ type Registry struct {
 	HashWidth        uint64
 	WindowSize       uint64
 	Routines         sync.WaitGroup
-	Queue            *chan bool
+	Queue            chan bool
 	ApiListener      net.Listener
 	PostingListeners []net.Listener
 	PostingConfigs   []PostingConfig
-	db               string
 	session          *mgo.Session
 	flags            *flags
 }
@@ -54,9 +53,8 @@ func parseFlags(args []string) *flags {
 	flags.Var(&f.HashWidth, "hash_width", "Specify the number of bits to use for hashing.")
 	flags.Var(&f.GroupSize, "group_size", "Specify the block size of the sparsetable.")
 	flags.Var(&f.InitialQuery, "initial_query", "Specify the range of doctypes to load initially. Blank string equals all documents.")
-	flags.StringVar(&f.Db, "db", "superfastmatch", "Name of mongo database.")
 	flags.StringVar(&f.ApiAddress, "api_address", "127.0.0.1:8080", "Address for API to listen on.")
-	flags.StringVar(&f.MongoUrl, "mongo_url", "127.0.0.1:27017", "Url to connect to MongoDB with.")
+	flags.StringVar(&f.MongoUrl, "mongo_url", "127.0.0.1:27017/superfastmatch", "Url to connect to MongoDB with.")
 	flags.Var(&f.PostingAddresses, "posting_addresses", "Comma-separated list of addresses for Posting Servers.")
 	flags.Parse(args)
 	return &f
@@ -81,7 +79,6 @@ func (r *Registry) Open() {
 	var err error
 	r.HashWidth = uint64(r.flags.HashWidth)
 	r.WindowSize = uint64(r.flags.WindowSize)
-	r.db = r.flags.Db
 	r.session, err = mgo.Dial(r.flags.MongoUrl)
 	checkErr(err)
 	if r.Mode == "posting" || r.Mode == "standalone" {
@@ -113,10 +110,7 @@ func (r *Registry) Open() {
 func (r *Registry) Close() {
 	if r.Mode == "standalone" || r.Mode == "api" {
 		checkErr(r.ApiListener.Close())
-		if r.Queue != nil {
-			*r.Queue <- true
-			r.Queue = nil
-		}
+		r.Queue <- true
 	}
 	if r.Mode == "standalone" || r.Mode == "posting" {
 		for i, _ := range r.flags.PostingAddresses {
@@ -131,13 +125,14 @@ func NewRegistry(args []string) *Registry {
 	r := new(Registry)
 	r.Mode, args = parseMode(args)
 	r.flags = parseFlags(args)
+	r.Queue = make(chan bool)
 	return r
 }
 
 func (r *Registry) DropDatabase() error {
-	return r.session.DB(r.db).DropDatabase()
+	return r.session.DB("").DropDatabase()
 }
 
 func (r *Registry) C(name string) *mgo.Collection {
-	return r.session.Clone().DB(r.db).C(name)
+	return r.session.Clone().DB("").C(name)
 }

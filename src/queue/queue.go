@@ -119,8 +119,6 @@ func (q *QueueItem) String() string {
 
 func Start(registry *registry.Registry) {
 	log.Println("Starting Queue Processor")
-	quit := make(chan bool)
-	registry.Queue = &quit
 	client, err := posting.NewClient(registry)
 	defer client.Close()
 	if err != nil {
@@ -130,12 +128,14 @@ func Start(registry *registry.Registry) {
 		panic(err)
 	}
 	queue := registry.C("queue")
+	registry.Routines.Add(1)
 	ticker := time.NewTicker(time.Second)
 	for {
 		select {
-		case <-*registry.Queue:
-			ticker.Stop()
+		case <-registry.Queue:
 			log.Println("Queue Processor Stopped")
+			ticker.Stop()
+			registry.Routines.Done()
 			return
 		case <-ticker.C:
 			start := time.Now()

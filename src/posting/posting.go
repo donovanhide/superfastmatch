@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"query"
 	"registry"
 	"sparsetable"
@@ -66,8 +67,6 @@ func (s *Stats) String() string {
 }
 
 func (p *Posting) alter(operation int, doc *document.Document) (err error) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
@@ -117,18 +116,16 @@ func (p *Posting) alter(operation int, doc *document.Document) (err error) {
 	doc.ApplyHasher(p.hashKey, alterFunc)
 	switch operation {
 	case Add:
-		p.logger.Println("Added Document: ", stats.String())
+		p.logger.Println("Added Document:", stats.String())
 		p.documents++
 	case Delete:
-		p.logger.Println("Deleted Document: ", stats.String())
+		p.logger.Println("Deleted Document:", stats.String())
 		p.documents--
 	}
 	return nil
 }
 
 func (p *Posting) search(doc *document.Document, results *document.SearchMap) (err error) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
@@ -159,7 +156,6 @@ func (p *Posting) search(doc *document.Document, results *document.SearchMap) (e
 }
 
 func (p *Posting) init(conf *registry.PostingConfig, c chan *document.Document) error {
-	p.lock.Lock()
 	start := time.Now()
 	p.table = sparsetable.Init(conf.Size, conf.GroupSize)
 	p.hashKey = document.HashKey{
@@ -169,9 +165,17 @@ func (p *Posting) init(conf *registry.PostingConfig, c chan *document.Document) 
 	p.offset = conf.Offset
 	p.size = conf.Size
 	p.logger.Printf("Initialising Posting Server with %v Size: %d Offset: %d", p.hashKey.String(), p.size, p.offset)
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt)
+load:
 	for doc := range c {
-		if err := p.alter(Add, doc); err != nil {
-			return newPostingError("Init:", err)
+		select {
+		case <-sig:
+			break load
+		default:
+			if err := p.alter(Add, doc); err != nil {
+				return newPostingError("Init:", err)
+			}
 		}
 	}
 	duration, average := time.Now().Sub(start).Seconds(), 0.0
@@ -179,7 +183,6 @@ func (p *Posting) init(conf *registry.PostingConfig, c chan *document.Document) 
 		average = duration / float64(p.documents)
 	}
 	p.logger.Printf("Posting Server Initialised with %v documents in %.2f secs Average: %.2f secs/doc", p.documents, duration, average)
-	p.lock.Unlock()
 	return nil
 }
 
@@ -189,6 +192,8 @@ func (p *Posting) Init(conf *registry.PostingConfig, reply *bool) error {
 		return newPostingError("Get Document:", err)
 	}
 	c := document.GetDocuments(docids, p.registry)
+	p.lock.Lock()
+	defer p.lock.Unlock()
 	return p.init(conf, c)
 }
 
@@ -197,6 +202,8 @@ func (p *Posting) Add(arg *document.DocumentArg, _ *struct{}) error {
 	if err != nil {
 		return newPostingError("Add Document:", err)
 	}
+	p.lock.Lock()
+	defer p.lock.Unlock()
 	return p.alter(Add, doc)
 }
 
@@ -205,6 +212,8 @@ func (p *Posting) Delete(arg *document.DocumentArg, _ *struct{}) error {
 	if err != nil {
 		return newPostingError("Delete Document:", err)
 	}
+	p.lock.Lock()
+	defer p.lock.Unlock()
 	return p.alter(Delete, doc)
 }
 
@@ -213,6 +222,8 @@ func (p *Posting) Search(arg *document.DocumentArg, result *document.SearchMap) 
 	if err != nil {
 		return newPostingError("Search Document:", err)
 	}
+	p.lock.RLock()
+	defer p.lock.RUnlock()
 	return p.search(doc, result)
 }
 
@@ -226,6 +237,7 @@ func (p *Posting) List(in Query, out *Query) error {
 	end := p.offset + p.size
 	l := NewPostingLine()
 	p.lock.RLock()
+	defer p.lock.Unlock()
 	for out.Start < end && out.Limit > 0 {
 		err := p.table.Get(out.Start-p.offset, l)
 		if err != nil {
@@ -253,6 +265,5 @@ func (p *Posting) List(in Query, out *Query) error {
 		out.Limit--
 	}
 	out.Result.TotalRows += p.table.Count()
-	p.lock.RUnlock()
 	return nil
 }
