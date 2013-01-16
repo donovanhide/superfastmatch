@@ -6,8 +6,6 @@ bin/*
 pkg/*
 mongo/*
 data/*
-builds/
 src/code.google.com/*
 mongo.tgz
-
 superfastmatch
