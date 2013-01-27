@@ -33,7 +33,8 @@ test:
 	rm -f test.log
 	mkdir -p data/test/
 	mongo/bin/mongod --fork --logpath=test.log --dbpath=data/test/
-	@$(foreach test,$(PKGS),go test -v $(test);)
+	go test -v ./... #Fancy way of testing all packages
+	# @$(foreach test,$(PKGS),go test -v $(test);)
 	mongo/bin/mongo admin --eval "db.shutdownServer()"
 
 dependencies:

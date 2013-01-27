@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 type ThemeId uint64
@@ -101,13 +102,16 @@ func notWhitespace(r rune) bool {
 func newFragment(text *utf8string.String, left, right, length int) (*Fragment, *Theme) {
 	match := text.Slice(left, left+length)
 	if trimLeft := strings.IndexFunc(match, notWhitespace); trimLeft != -1 {
+		unicodeTrim := utf8.RuneCountInString(match[:trimLeft])
 		match = match[trimLeft:]
-		left += trimLeft
-		right += trimLeft
+		left += unicodeTrim
+		right += unicodeTrim
+		length -= unicodeTrim
 	}
 	if trimmedLength := strings.LastIndexFunc(match, notWhitespace) + 1; trimmedLength != 0 {
+		unicodeTrim := utf8.RuneCountInString(match[trimmedLength:])
 		match = match[:trimmedLength]
-		length = trimmedLength
+		length -= unicodeTrim
 	}
 	theme := newTheme(match)
 	return &Fragment{
@@ -116,6 +120,16 @@ func newFragment(text *utf8string.String, left, right, length int) (*Fragment, *
 		Length: length,
 		Id:     theme.Id,
 	}, theme
+}
+
+func (f *Fragment) Pretty(textLimit int, left *utf8string.String) string {
+	length := min(textLimit-3, f.Length)
+	cleaner := strings.NewReplacer("\n", " ")
+	text := cleaner.Replace(left.Slice(f.Left, f.Left+length))
+	if length < f.Length {
+		text = text + "..."
+	}
+	return fmt.Sprintf("Left: %8d\tRight: %8d\tLength: %8d\tText: %s\n", f.Left, f.Right, f.Length, text)
 }
 
 func (f *Fragment) String(left, right *utf8string.String) string {
@@ -132,6 +146,6 @@ func (f *Fragment) MarshalJSON() ([]byte, error) {
 }
 
 func (f *Fragment) UnmarshalJSON(b []byte) error {
-	_, err := fmt.Sscanf(string(b), "[%d,%d,%d,%d]", f.Left, f.Right, f.Length, f.Id)
+	_, err := fmt.Sscanf(string(b), "[%d,%d,%d,%d]", &f.Left, &f.Right, &f.Length, &f.Id)
 	return err
 }

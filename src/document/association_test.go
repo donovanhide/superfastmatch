@@ -30,8 +30,8 @@ func testWithSelf(windowSize uint64, expectedFragments, expectedThemes int, text
 }
 
 func TestRealAssociation(t *testing.T) {
-	bible := openFile("../../fixtures/bible.txt.gz")
-	koran := openFile("../../fixtures/koran.txt.gz")
+	bible := openFile("../../fixtures/gutenberg/bible.txt.gz")
+	koran := openFile("../../fixtures/gutenberg/koran.txt.gz")
 	testIsSymmetric(30, bible, koran, t)
 	testWithSelf(30, 108147, 13987, bible, t)
 	testWithSelf(30, 25414, 2152, koran, t)

@@ -27,7 +27,7 @@ func (s *QuerySuite) TestQueue(c *C) {
 		c.Check(item, NotNil)
 		c.Check(err, IsNil)
 	}
-	time.Sleep(2 * time.Second)
+	time.Sleep(4 * time.Second) // Nasty!
 	stats, err := Stats(s.Registry)
 	c.Check(err, IsNil)
 	c.Check(stats["Completed"], Equals, 20)
@@ -42,7 +42,7 @@ func (s *QuerySuite) TestQueue(c *C) {
 		c.Check(item, NotNil)
 		c.Check(err, IsNil)
 	}
-	time.Sleep(2 * time.Second)
+	time.Sleep(4 * time.Second) // Nasty!
 	stats, err = Stats(s.Registry)
 	c.Check(err, IsNil)
 	c.Check(stats["Completed"], Equals, 40)
@@ -54,10 +54,12 @@ func (s *QuerySuite) TestQueue(c *C) {
 }
 
 func (s *QuerySuite) TestPayload(c *C) {
-	_, err := NewQueueItem(s.Registry, "test", nil, nil, nil, nil, strings.NewReader("I am the payload"))
+	go Start(s.Registry)
+	go posting.Serve(s.Registry)
+	item, err := NewQueueItem(s.Registry, "test", nil, nil, nil, nil, strings.NewReader("I am the payload"))
 	c.Check(err, IsNil)
 	var q QueueItem
-	s.Registry.C("queue").Find(nil).One(&q)
+	s.Registry.C("queue").FindId(item.Id).One(&q)
 	c.Check(q.Payload, NotNil)
 	p, err := q.getPayload()
 	c.Check(p, Equals, "I am the payload")

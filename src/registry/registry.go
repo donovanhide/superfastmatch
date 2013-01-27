@@ -2,6 +2,7 @@ package registry
 
 import (
 	"flag"
+	"fmt"
 	"labix.org/v2/mgo"
 	"net"
 	"sync"
@@ -50,6 +51,12 @@ func parseFlags(args []string) *flags {
 		PostingAddresses: []string{"127.0.0.1:8090", "127.0.0.1:8091"},
 	}
 	flags := flag.NewFlagSet("flags", flag.ExitOnError)
+	flags.Usage = func() {
+		flags.PrintDefaults()
+		fmt.Println("Follow superfastmatch with either a mode or a client command to alter behaviour")
+		fmt.Println("Modes: api queue posting")
+		fmt.Println("Client commands: add delete search associate")
+	}
 	flags.Var(&f.WindowSize, "window_size", "Specify the Window Size to use for hashing.")
 	flags.Var(&f.HashWidth, "hash_width", "Specify the number of bits to use for hashing.")
 	flags.Var(&f.GroupSize, "group_size", "Specify the block size of the sparsetable.")
@@ -70,7 +77,9 @@ func parseMode(args []string) (string, []string) {
 		return "api", args[2:]
 	case "posting":
 		return "posting", args[2:]
-	case "add", "delete", "associate", "switch":
+	case "queue":
+		return "queue", args[2:]
+	case "add", "delete", "associate", "switch", "search":
 		return "client", args[1:]
 	}
 	return "standalone", args[1:]
@@ -112,7 +121,11 @@ func (r *Registry) Open() {
 func (r *Registry) Close() {
 	if r.Mode == "standalone" || r.Mode == "api" {
 		checkErr(r.ApiListener.Close())
-		r.Queue <- true
+	}
+	if r.Mode == "standalone" || r.Mode == "queue" {
+		if r.Queue != nil {
+			r.Queue <- true
+		}
 	}
 	if r.Mode == "standalone" || r.Mode == "posting" {
 		for i, _ := range r.flags.PostingAddresses {
@@ -127,7 +140,6 @@ func NewRegistry(args []string) *Registry {
 	r := new(Registry)
 	r.Mode, args = parseMode(args)
 	r.flags = parseFlags(args)
-	r.Queue = make(chan bool)
 	return r
 }
 

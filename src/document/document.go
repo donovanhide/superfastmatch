@@ -35,6 +35,7 @@ type Document struct {
 	Title          string        `json:"title"`
 	Text           string        `json:",omitempty"`
 	Length         uint64        `json:"characters"`
+	Valid          bool          `json:"valid"`
 	Meta           MetaMap       `json:"metaData,omitempty"`
 	Associations   *Associations `json:",omitempty"`
 	hashes         map[HashKey][]uint64
@@ -77,6 +78,13 @@ func (d *Document) String() string {
 	return fmt.Sprintf("%v %v %v", d.Id, d.Length, d.Title)
 }
 
+func (d *Document) Pretty(titleLimit int) string {
+	title := utf8string.NewString(d.Title)
+	length := min(titleLimit, title.RuneCount())
+	format := fmt.Sprintf("Doc:%%%ds (%%d,%%d)", titleLimit)
+	return fmt.Sprintf(format, title.Slice(0, length), d.Id.Doctype, d.Id.Docid)
+}
+
 func (d *Document) init() *Document {
 	d.hashes = make(map[HashKey][]uint64)
 	d.blooms = make(map[BloomKey]Bloom)
@@ -89,6 +97,7 @@ func BuildDocument(doctype uint32, docid uint32, title string, text string, meta
 		Title:  title,
 		Text:   text,
 		Meta:   meta,
+		Valid:  utf8.ValidString(text),
 		Length: uint64(utf8.RuneCountInString(text)),
 	}
 	return doc.init(), nil
@@ -98,9 +107,6 @@ func NewDocument(id *DocumentID, values *url.Values) (*Document, error) {
 	title, text := values.Get("title"), values.Get("text")
 	if len(title) == 0 || len(text) == 0 {
 		return nil, errors.New("Missing title or text fields")
-	}
-	if !utf8.ValidString(title) || !utf8.ValidString(text) {
-		return nil, errors.New("Invalid UTF8 submitted")
 	}
 	meta := make(MetaMap)
 	for k, v := range *values {

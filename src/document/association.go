@@ -2,6 +2,7 @@ package document
 
 import (
 	"bytes"
+	"exp/utf8string"
 	"fmt"
 	"sync"
 )
@@ -19,9 +20,22 @@ type Association struct {
 	FragmentCount int           `json:"fragment_count"`
 }
 
+type AssociationSlice []Association
+
 type Associations struct {
 	Meta      MetaMap
 	Documents []Association
+}
+
+func (s AssociationSlice) String(other string) string {
+	var buf bytes.Buffer
+	text := utf8string.NewString(other)
+	for _, a := range s {
+		for _, f := range a.Fragments {
+			buf.WriteString(fmt.Sprintf("%s\t%s", a.Document.Pretty(15), f.Pretty(60, text)))
+		}
+	}
+	return buf.String()
 }
 
 func Greater(l, r Inverted) bool {

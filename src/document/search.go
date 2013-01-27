@@ -17,9 +17,9 @@ type DocumentArg struct {
 }
 
 type SearchResult struct {
-	Success      bool          `json:"success"`
-	TotalRows    int           `json:"totalRows"`
-	Associations []Association `json:"documents,omitempty"`
+	Success      bool             `json:"success"`
+	TotalRows    int              `json:"totalRows"`
+	Associations AssociationSlice `json:"documents,omitempty"`
 }
 
 type Tally struct {

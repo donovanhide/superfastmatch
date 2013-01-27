@@ -33,6 +33,13 @@ func init() {
 	}
 }
 
+func min(a,b int)int{
+	if a>b{
+		return b
+	}
+	return a
+}
+
 func whiteSpaceHash(hashKey HashKey) uint64 {
 	hash, ok := whiteSpaceHashes[hashKey]
 	if ok {
