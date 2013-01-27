@@ -3,6 +3,31 @@ Introduction
 
 Superfastmatch is a tool for bulk comparison of text. It enables you to discover the longest common substrings between one document and millions of others.
 
+Requirements
+------------
+
+One of:
+
+* 64 bit Linux
+* 64 bit Windows
+* 64 bit OS-X
+
+and a working install of Mongo DB 2.2. Details [here](http://docs.mongodb.org/manual/installation/)
+
+Binary Downloads
+----------------
+
+* [Linux](https://raw.github.com/donovanhide/superfastmatch-go/master/builds/superfastmatch-linux)
+* [Windows](https://raw.github.com/donovanhide/superfastmatch-go/master/builds/superfastmatch.exe)
+* [OS X](https://raw.github.com/donovanhide/superfastmatch-go/master/builds/superfastmatch-darwin)
+
+For Linux and OS X you might have to add the execution bit, for example on OS X:
+
+```bash
+curl https://raw.github.com/donovanhide/superfastmatch-go/master/builds/superfastmatch-darwin -o superfastmatch
+chmod +x ./superfastmatch
+```
+
 Example usage
 -------------
 
@@ -123,33 +148,6 @@ Doc:david_copperfie (1,3)	Left:  3208034	Right:   673473	Length:       30	Text: 
 Doc:david_copperfie (1,3)	Left:  3354972	Right:   653547	Length:       30	Text: toil not, neither do they spin
 
 Successes: 0	 Failures:0
-```
-
-
-
-Requirements
-------------
-
-One of:
-
-* 64 bit Linux
-* 64 bit Windows
-* 64 bit OS-X
-
-and a working install of Mongo DB 2.2. Details [here](http://docs.mongodb.org/manual/installation/)
-
-Binary Downloads
-----------------
-
-* [Linux](https://raw.github.com/donovanhide/superfastmatch-go/master/builds/superfastmatch-linux)
-* [Windows](https://raw.github.com/donovanhide/superfastmatch-go/master/builds/superfastmatch.exe)
-* [OS X](https://raw.github.com/donovanhide/superfastmatch-go/master/builds/superfastmatch-darwin)
-
-For Linux and OS X you might have to add the execution bit, for example on OS X:
-
-```bash
-curl https://raw.github.com/donovanhide/superfastmatch-go/master/builds/superfastmatch-darwin -o superfastmatch
-chmod +x ./superfastmatch
 ```
 
 Installation from source
