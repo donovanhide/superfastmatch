@@ -54,7 +54,7 @@ Successes: 10	 Failures:0
 And then search for the bible in this collection of documents:
 
 ```bash
-$ ./bin/superfastmatch search fixtures/gutenberg/bible.txt.gz 
+$ ./superfastmatch search fixtures/gutenberg/bible.txt.gz 
 Doc:bleak_house.txt (1,1)	Left:  3728816	Right:    48538	Length:       67	Text: He that is without sin among you, let him first cast a st...
 Doc:bleak_house.txt (1,1)	Left:  3728739	Right:    48461	Length:       55	Text: So when they continued asking him, he lifted up himself
 Doc:bleak_house.txt (1,1)	Left:  3532111	Right:    48773	Length:       41	Text: Lest coming suddenly he find you sleeping
