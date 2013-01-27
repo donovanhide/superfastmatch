@@ -129,7 +129,7 @@ type tarHeaderFileInfo struct {
 
 func (fi tarHeaderFileInfo) Name() string       { return path.Base(fi.th.Name) }
 func (fi tarHeaderFileInfo) Size() int64        { return fi.th.Size }
-func (fi tarHeaderFileInfo) IsDir() bool        { return fi.th.Mode == tar.TypeDir }
+func (fi tarHeaderFileInfo) IsDir() bool        { return fi.th.Typeflag == tar.TypeDir }
 func (fi tarHeaderFileInfo) ModTime() time.Time { return fi.th.ModTime }
 func (fi tarHeaderFileInfo) Mode() os.FileMode  { panic("not implemented"); return os.ModePerm }
 func (fi tarHeaderFileInfo) Sys() interface{}   { return fi.th }
