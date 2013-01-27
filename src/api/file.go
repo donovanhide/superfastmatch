@@ -21,15 +21,15 @@ func walkTar(pathname string, fi os.FileInfo, r io.Reader, f fileFn) error {
 	tr := tar.NewReader(r)
 	for {
 		hdr, err := tr.Next()
+		fi := tarHeaderFileInfo{hdr}
 		switch {
 		case err == io.EOF:
 			return nil
 		case err != nil:
 			return fmt.Errorf("Read tar file:%s/f", err)
-		case hdr.FileInfo().IsDir():
+		case fi.IsDir():
 			continue
 		}
-		fi := tarHeaderFileInfo{hdr}
 		if err := processFile(pathname, fi, ioutil.NopCloser(tr), f); err != nil {
 			return err
 		}
