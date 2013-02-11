@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"labix.org/v2/mgo"
+	"log"
 	"net"
 	"sync"
 )
@@ -89,9 +90,10 @@ func (r *Registry) Open() {
 	var err error
 	r.HashWidth = uint64(r.flags.HashWidth)
 	r.WindowSize = uint64(r.flags.WindowSize)
-	r.session, err = mgo.Dial(r.flags.MongoUrl)
 	r.ApiAddress = r.flags.ApiAddress
-	checkErr(err)
+	if r.session, err = mgo.Dial(r.flags.MongoUrl); err != nil {
+		log.Fatalf("Error connecting to mongo instance: %s", err)
+	}
 	if r.Mode == "posting" || r.Mode == "standalone" {
 		r.PostingListeners = make([]net.Listener, len(r.flags.PostingAddresses))
 		for i, postingAddress := range r.flags.PostingAddresses {
