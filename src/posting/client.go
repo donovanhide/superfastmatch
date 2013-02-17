@@ -1,8 +1,8 @@
 package posting
 
 import (
-	"code.google.com/p/gorilla/schema"
 	"document"
+	"github.com/gorilla/schema"
 	"net/rpc"
 	"net/url"
 	"registry"
@@ -75,7 +75,7 @@ func (p *Client) Close() {
 	}
 }
 
-func (p *Client) Search(d *document.DocumentArg) (*document.SearchResult, error) {
+func (p *Client) Search(d *document.DocumentArg) (*document.SearchGroup, error) {
 	result := make(document.SearchGroup, len(p.clients))
 	done := make(chan *rpc.Call, len(p.clients))
 	for i, _ := range p.clients {
@@ -87,7 +87,7 @@ func (p *Client) Search(d *document.DocumentArg) (*document.SearchResult, error)
 			return nil, replyCall.Error
 		}
 	}
-	return result.GetResult(p.registry, d)
+	return &result, nil
 }
 
 // Don't care about the replies, just check the error

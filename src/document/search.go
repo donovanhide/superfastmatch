@@ -2,8 +2,8 @@ package document
 
 import (
 	"bytes"
-	"code.google.com/p/gorilla/schema"
 	"fmt"
+	"github.com/gorilla/schema"
 	"net/url"
 	"registry"
 	"sort"
@@ -11,9 +11,10 @@ import (
 )
 
 type DocumentArg struct {
-	Id    *DocumentID
-	Text  string `schema:"text"`
-	Limit int    `schema:"limit"`
+	Id          *DocumentID
+	TargetRange string
+	Text        string `schema:"text"`
+	Limit       int    `schema:"limit"`
 }
 
 type SearchResult struct {
@@ -41,7 +42,6 @@ func NewDocumentArg(values url.Values) *DocumentArg {
 		Limit: 10,
 	}
 	decoder.Decode(d, values)
-	// fmt.Println(d, values)
 	return d
 }
 
@@ -116,7 +116,7 @@ func (m *MatchSlice) String() string {
 	return out.String()
 }
 
-func (m MatchSlice) Fill(registry *registry.Registry, doc *Document) {
+func (m MatchSlice) Fill(registry *registry.Registry, doc *Document) MatchSlice {
 	fills := make(map[DocumentID]*Match)
 	docids := make([]DocumentID, len(m))
 	for i, _ := range m {
@@ -130,18 +130,22 @@ func (m MatchSlice) Fill(registry *registry.Registry, doc *Document) {
 		fmt.Printf("Document: %v Association Time:%.2fs\n", other, time.Now().Sub(start).Seconds())
 	}
 	fmt.Printf("Search Time:%.2fs\n", time.Now().Sub(searchStart).Seconds())
+	return m
 }
 
-func (s *SearchGroup) GetResult(registry *registry.Registry, d *DocumentArg) (*SearchResult, error) {
+func (s *SearchGroup) GetResult(registry *registry.Registry, d *DocumentArg, save bool) (*SearchResult, error) {
 	doc, err := d.GetDocument(registry)
 	if err != nil {
 		return nil, err
 	}
 	results := s.Merge()
+	if save {
+		results.Fill(registry, doc)
+		doc.Save(registry)
+	}
 	if d.Limit < len(results) {
 		results = results[:d.Limit]
 	}
-	results.Fill(registry, doc)
 	if doc.Associations == nil {
 		return &SearchResult{}, nil
 	}

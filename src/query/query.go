@@ -1,16 +1,19 @@
 package query
 
 import (
-	"code.google.com/p/gorilla/schema"
 	"document"
+	"github.com/gorilla/schema"
 	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
 	"net/url"
 	"reflect"
+	"regexp"
 	"registry"
 	"strconv"
 	"strings"
 )
+
+type DocTypeRange string
 
 type QueryParams struct {
 	Filter      bson.M
@@ -23,7 +26,7 @@ type QueryParams struct {
 
 type DocumentQueryParams struct {
 	QueryParams
-	Doctypes string `schema:"doctypes"`
+	Doctypes DocTypeRange `schema:"doctypes"`
 }
 
 type DocumentResult struct {
@@ -32,6 +35,10 @@ type DocumentResult struct {
 }
 
 var decoder = schema.NewDecoder()
+
+func init() {
+	decoder.RegisterConverter(DocTypeRange(""), decodeDoctypeRange)
+}
 
 func (q *QueryParams) getQuery(values *url.Values, coll *mgo.Collection) *mgo.Query {
 	q.Limit = 10
@@ -49,11 +56,21 @@ func fillResult(r interface{}, query *mgo.Query) error {
 	return nil
 }
 
-func parseDocTypeRange(r string) bson.M {
+var docTypeRangeRegex = regexp.MustCompile(`^(\d+(-\d+)?(:\d+(-\d+)?)*)*$`)
+
+func (r DocTypeRange) Valid() bool {
+	return docTypeRangeRegex.MatchString(string(r))
+}
+
+func decodeDoctypeRange(value string) reflect.Value {
+	return reflect.ValueOf(DocTypeRange(value))
+}
+
+func (r DocTypeRange) Parse() bson.M {
 	if len(r) == 0 {
 		return bson.M{}
 	}
-	sections := strings.Split(r, ":")
+	sections := strings.Split(string(r), ":")
 	filter := make([]bson.M, len(sections))
 	for i, f := range sections {
 		g := strings.Split(f, "-")
@@ -73,7 +90,7 @@ func GetDocuments(values *url.Values, registry *registry.Registry) (*DocumentRes
 	r := new(DocumentResult)
 	decoder.Decode(q, *values)
 	if len(q.Doctypes) > 0 {
-		q.Filter = parseDocTypeRange(q.Doctypes)
+		q.Filter = q.Doctypes.Parse()
 	}
 	q.Select = bson.M{"text": 0}
 	q.DefaultSort = []string{"doctype", "docid"}
@@ -89,7 +106,7 @@ func GetDocuments(values *url.Values, registry *registry.Registry) (*DocumentRes
 
 func GetDocids(docTypeRange string, registry *registry.Registry) ([]document.DocumentID, error) {
 	docs := make([]document.DocumentID, 0)
-	query := parseDocTypeRange(docTypeRange)
+	query := DocTypeRange(docTypeRange).Parse()
 	pipe := []bson.M{{"$project": bson.M{"doctype": "$_id.doctype", "docid": "$_id.docid"}}, {"$match": query}}
 	err := registry.C("documents").Pipe(pipe).All(&docs)
 	return docs, err

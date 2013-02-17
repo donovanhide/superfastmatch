@@ -1,10 +1,10 @@
 package document
 
 import (
-	"code.google.com/p/gorilla/mux"
 	"errors"
 	"exp/utf8string"
 	"fmt"
+	"github.com/donovanhide/mux"
 	"net/http"
 	"net/url"
 	"registry"

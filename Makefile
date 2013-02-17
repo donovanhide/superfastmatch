@@ -39,5 +39,6 @@ test:
 
 dependencies:
 	go get -u launchpad.net/gocheck
-	go get -u code.google.com/p/gorilla/mux
+	go get -u github.com/donovanhide/mux/
+	go get -u github.com/gorilla/schema
 	go get -u labix.org/v2/mgo

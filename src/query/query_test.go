@@ -17,11 +17,39 @@ type QuerySuite struct {
 
 var _ = Suite(&QuerySuite{})
 
+var doctypeRangeTests = []struct {
+	doctypes DocTypeRange
+	valid    bool
+}{
+	{"", true},
+	{"1", true},
+	{"1:3", true},
+	{"1-2:3", true},
+	{"1-2:3-2", true},
+	{"1-2:3-2", true},
+	{"-", false},
+	{":", false},
+	{"1-", false},
+	{"-1", false},
+	{"1-2:", false},
+	{":1-2", false},
+	{"asas1-2asas", false},
+	{"1:2asas", false},
+}
+
 func buildValues(method string, url string, doctypes string) *url.Values {
 	req, _ := http.NewRequest(method, url, nil)
 	req.ParseForm()
 	req.Form.Set("doctypes", doctypes)
 	return &req.Form
+}
+
+func TestDocTypeRange(t *testing.T) {
+	for _, tt := range doctypeRangeTests {
+		if tt.doctypes.Valid() != tt.valid {
+			t.Errorf("Validity of \"%s\"!=%v", tt.doctypes, tt.valid)
+		}
+	}
 }
 
 func (s *QuerySuite) TestFillDocumentQuery(c *C) {
@@ -30,7 +58,7 @@ func (s *QuerySuite) TestFillDocumentQuery(c *C) {
 	decoder.Decode(q, *values)
 	q.DefaultSort = []string{"doctype", "docid"}
 	q.getQuery(values, s.Registry.C("documents"))
-	c.Check(q.Doctypes, Equals, "1")
+	c.Check(q.Doctypes, Equals, DocTypeRange("1"))
 	c.Check(q.Limit, Equals, 20)
 	c.Check(q.Sort, DeepEquals, []string{"text", "doctype", "docid"})
 }

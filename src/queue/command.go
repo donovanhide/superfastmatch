@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"posting"
+	"query"
 	"registry"
 )
 
@@ -17,9 +18,10 @@ type QueueItemRun struct {
 type commandFunc func(item *QueueItem, registry *registry.Registry, client *posting.Client, c chan *QueueItemRun)
 
 var commandMap = map[string]commandFunc{
-	"Add Document":    AddDocument,
-	"Delete Document": DeleteDocument,
-	"Test Corpus":     TestCorpus,
+	"Add Document":       AddDocument,
+	"Delete Document":    DeleteDocument,
+	"Associate Document": AssociateDocument,
+	"Test Corpus":        TestCorpus,
 }
 
 func runFailure(item *QueueItem, s string, err error) *QueueItemRun {
@@ -99,8 +101,35 @@ func DeleteDocument(item *QueueItem, registry *registry.Registry, client *postin
 	c <- runSuccess(item)
 }
 
+func AssociateDocument(item *QueueItem, registry *registry.Registry, client *posting.Client, c chan *QueueItemRun) {
+	var err error
+	var source []document.DocumentID
+	// if item.Source != nil {
+	// 	source = []document.DocumentID{*item.Source}
+	// }
+	// // if item.Target != nil {
+	// // 	target = []document.DocumentID{*item.Target}
+	// // }
+	if item.SourceRange != "" {
+		if source, err = query.GetDocids(item.SourceRange, registry); err != nil {
+			c <- runFailure(item, "Get Source Range", err)
+		}
+	}
+	for _, s := range source {
+		doc := &document.DocumentArg{Id: &s, TargetRange: item.TargetRange}
+		result, err := client.Search(doc)
+		if err != nil {
+			c <- runFailure(item, "Search", err)
+		}
+		if _, err := result.GetResult(registry, doc, true); err != nil {
+			c <- runFailure(item, "Get Result", err)
+		}
+	}
+	c <- runSuccess(item)
+}
+
 func TestCorpus(item *QueueItem, registry *registry.Registry, client *posting.Client, c chan *QueueItemRun) {
-	docs := document.BuildTestCorpus(10, 20, 500)
+	docs := document.BuildTestCorpus(10, 20, 5000)
 	for doc := <-docs; doc != nil; doc = <-docs {
 		if err := doc.Save(registry); err != nil {
 			c <- runFailure(item, "Save Document", err)

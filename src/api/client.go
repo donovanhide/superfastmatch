@@ -26,6 +26,8 @@ var deleteDocid = deleteFlags.Uint64("docid", 1, "A docid for the document to be
 
 var searchFlags = flag.NewFlagSet("Search", flag.ExitOnError)
 
+var associationFlags = flag.NewFlagSet("Associate document(s)", flag.ExitOnError)
+
 var out = new(tabwriter.Writer)
 
 func init() {
@@ -41,6 +43,10 @@ func init() {
 	searchFlags.Usage = func() {
 		fmt.Println("Search document")
 		fmt.Println("superfastmatch search [quoted text,file(s),directories, archives]")
+	}
+	associationFlags.Usage = func() {
+		fmt.Println("Associate document(s)")
+		fmt.Println("superfastmatch associate [-source Doc Type Range] [-target Doc Type Range] ")
 	}
 }
 
@@ -124,8 +130,6 @@ func search(text string) {
 		fmt.Println("Search:", err)
 	case code == http.StatusOK:
 		fmt.Fprintln(out, result.Associations.String(text))
-		// fmt.Fprintf(out, "%v/f", result)
-		// c <- &queued
 	case code != http.StatusOK:
 		fmt.Println(code)
 	}
@@ -206,7 +210,9 @@ func PollQueue(c chan *QueuedResponse) chan bool {
 				break
 			}
 		}
-		fmt.Printf("Successes: %d\t Failures:%d\n", len(successes), len(failures))
+		if len(successes) > 0 || len(failures) > 0 {
+			fmt.Printf("Successes: %d\t Failures:%d\n", len(successes), len(failures))
+		}
 		if len(failures) > 0 {
 			for _, fail := range failures {
 				fmt.Printf("Failed: %s\n", fail.String())

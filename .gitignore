@@ -9,3 +9,9 @@ data/*
 src/code.google.com/*
 mongo.tgz
 superfastmatch
+
+src/github.com/donovanhide/mux/
+
+src/github.com/gorilla/context/
+
+src/github.com/gorilla/schema/

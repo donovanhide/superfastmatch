@@ -14,7 +14,6 @@ import (
 	"log"
 	"net/url"
 	"posting"
-	"query"
 	"registry"
 	"time"
 )
@@ -30,22 +29,22 @@ type QueueResult struct {
 }
 
 type QueueItem struct {
-	Id          bson.ObjectId              `bson:"_id" json:"id"`
-	Command     string                     `bson:"command" json:"command"`
-	Source      *document.DocumentID       `bson:"source" json:"source"`
-	Target      *document.DocumentID       `bson:"target" json:"target"`
-	SourceRange *query.DocumentQueryParams `bson:"sourceRange" json:"sourceRange"`
-	TargetRange *query.DocumentQueryParams `bson:"targetRange" json:"targetRange"`
-	Status      string                     `bson:"status" json:"status"`
-	Error       string                     `bson:"error" json:"error"`
-	Payload     []byte                     `bson:"payload" json:"-"`
+	Id          bson.ObjectId        `bson:"_id" json:"id"`
+	Command     string               `bson:"command" json:"command"`
+	Source      *document.DocumentID `bson:"source" json:"source"`
+	Target      *document.DocumentID `bson:"target" json:"target"`
+	SourceRange string               `bson:"sourceRange" json:"sourceRange"`
+	TargetRange string               `bson:"targetRange" json:"targetRange"`
+	Status      string               `bson:"status" json:"status"`
+	Error       string               `bson:"error" json:"error"`
+	Payload     []byte               `bson:"payload" json:"-"`
 }
 
 type QueueItemSlice []QueueItem
 
 func NewQueueItem(registry *registry.Registry, command string,
 	source *document.DocumentID, target *document.DocumentID,
-	sourceRange *query.DocumentQueryParams, targetRange *query.DocumentQueryParams,
+	sourceRange string, targetRange string,
 	payload io.Reader) (*QueueItem, error) {
 	buf := new(bytes.Buffer)
 	w, _ := gzip.NewWriterLevel(buf, gzip.BestSpeed)
@@ -122,10 +121,10 @@ func (q *QueueItem) String() string {
 	if q.Target != nil {
 		fmt.Fprint(buf, " Target: ", q.Target)
 	}
-	if q.SourceRange != nil {
+	if q.SourceRange != "" {
 		fmt.Fprint(buf, " Source Range: ", q.SourceRange)
 	}
-	if q.TargetRange != nil {
+	if q.TargetRange != "" {
 		fmt.Fprint(buf, " Target Range: ", q.TargetRange)
 	}
 	if q.Error != "" {
@@ -189,16 +188,19 @@ func GetQueue(values url.Values, registry *registry.Registry) (*QueueResult, err
 	}, nil
 }
 
-func GetQueueItem(values url.Values, registry *registry.Registry) (*QueueItem, error) {
-	id := values.Get("id")
-	if id == "" {
-		return nil, fmt.Errorf("Missing queue id")
-	}
+func getQueueItem(id bson.ObjectId, registry *registry.Registry) (*QueueItem, error) {
 	var item QueueItem
-	if err := registry.C("queue").FindId(bson.ObjectIdHex(id)).Select(bson.M{"payload": 0}).One(&item); err != nil {
+	if err := registry.C("queue").FindId(id).Select(bson.M{"payload": 0}).One(&item); err != nil {
 		return nil, fmt.Errorf("Queue item not found: %s", err)
 	}
 	return &item, nil
+}
+
+func GetQueueItem(values url.Values, registry *registry.Registry) (*QueueItem, error) {
+	if id := values.Get("id"); id != "" {
+		return getQueueItem(bson.ObjectIdHex(id), registry)
+	}
+	return nil, fmt.Errorf("Missing queue id")
 }
 
 func Stats(registry *registry.Registry) (map[string]int, error) {

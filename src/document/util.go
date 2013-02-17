@@ -33,8 +33,8 @@ func init() {
 	}
 }
 
-func min(a,b int)int{
-	if a>b{
+func min(a, b int) int {
+	if a > b {
 		return b
 	}
 	return a

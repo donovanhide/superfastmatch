@@ -1,10 +1,10 @@
 package api
 
 import (
-	"code.google.com/p/gorilla/mux"
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"github.com/donovanhide/mux"
 	"io"
 	"log"
 	"net/http"

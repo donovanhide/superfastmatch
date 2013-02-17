@@ -1,8 +1,9 @@
 package api
 
 import (
-	"code.google.com/p/gorilla/mux"
 	"document"
+	"fmt"
+	"github.com/donovanhide/mux"
 	"log"
 	"net/http"
 	"posting"
@@ -15,13 +16,39 @@ var r *registry.Registry
 
 var c *posting.Client
 
+const docRegex = `[0-9]+`
+const queueRegex = `[0-9a-f]{24}`
+const rangeRegex = `\d+(-\d+)?(:\d+(-\d+)?)*`
+
+type is []interface{}
+type ss []string
+
+var routes = []struct {
+	path    string
+	regexes is
+	fn      appHandler
+	methods ss
+}{
+	{"/document/", nil, documentsHandler, ss{"GET", "DELETE"}},
+	{"/document/test/", nil, testHandler, ss{"POST"}},
+	{"/document/{doctypes:%s}/", is{rangeRegex}, documentsHandler, ss{"GET", "DELETE"}},
+	{"/document/{doctype:%s}/{docid:%s}/", is{docRegex, docRegex}, documentHandler, ss{"GET", "POST", "DELETE"}},
+	{"/association/", nil, associationHandler, ss{"GET", "POST", "DELETE"}},
+	{"/association/{source:%s}/", is{rangeRegex}, associationHandler, ss{"GET", "POST", "DELETE"}},
+	{"/association/{source:%s}/{target:%s}/", is{rangeRegex, rangeRegex}, associationHandler, ss{"GET", "POST", "DELETE"}},
+	{"/queue/", nil, queueHandler, ss{"GET"}},
+	{"/queue/{id:%s}/", is{queueRegex}, queueItemHandler, ss{"GET"}},
+	{"/index/", nil, indexHandler, ss{"GET"}},
+	{"/search/", nil, searchHandler, ss{"POST"}},
+}
+
 type QueuedResponse struct {
 	*queue.QueueItem
 	Success bool `json:"success"`
 }
 
 func testHandler(rw http.ResponseWriter, req *http.Request) *appError {
-	item, err := queue.NewQueueItem(r, "Test Corpus", nil, nil, nil, nil, req.Body)
+	item, err := queue.NewQueueItem(r, "Test Corpus", nil, nil, "", "", req.Body)
 	if err != nil {
 		return &appError{err, "Test Corpus Problem", 500}
 	}
@@ -58,7 +85,7 @@ func documentHandler(rw http.ResponseWriter, req *http.Request) *appError {
 		if err != nil {
 			return &appError{err, "Add document error", 500}
 		}
-		item, err := queue.NewQueueItem(r, "Add Document", nil, target, nil, nil, req.Body)
+		item, err := queue.NewQueueItem(r, "Add Document", nil, target, "", "", req.Body)
 		if err != nil {
 			return &appError{err, "Add document error", 500}
 		}
@@ -68,9 +95,29 @@ func documentHandler(rw http.ResponseWriter, req *http.Request) *appError {
 		if err != nil {
 			return &appError{err, "Delete document error", 500}
 		}
-		item, err := queue.NewQueueItem(r, "Delete Document", nil, target, nil, nil, req.Body)
+		item, err := queue.NewQueueItem(r, "Delete Document", nil, target, "", "", req.Body)
 		if err != nil {
 			return &appError{err, "Delete document error", 500}
+		}
+		return writeJson(rw, req, &QueuedResponse{Success: true, QueueItem: item}, 202)
+	}
+	return nil
+}
+
+func associationHandler(rw http.ResponseWriter, req *http.Request) *appError {
+	fillValues(req)
+	switch req.Method {
+	case "GET":
+		fmt.Println(mux.Vars(req))
+		association := &document.Association{}
+		return writeJson(rw, req, association, 200)
+	case "DELETE":
+		return nil
+	case "POST":
+		source, target := mux.Vars(req)["source"], mux.Vars(req)["target"]
+		item, err := queue.NewQueueItem(r, "Associate Document", nil, nil, source, target, req.Body)
+		if err != nil {
+			return &appError{err, "Association error", 500}
 		}
 		return writeJson(rw, req, &QueuedResponse{Success: true, QueueItem: item}, 202)
 	}
@@ -116,11 +163,15 @@ func indexHandler(rw http.ResponseWriter, req *http.Request) *appError {
 func searchHandler(rw http.ResponseWriter, req *http.Request) *appError {
 	fillValues(req)
 	search := document.NewDocumentArg(req.Form)
-	rows, err := c.Search(search)
+	group, err := c.Search(search)
 	if err != nil {
-		return &appError{err, "Search problem", 500}
+		return &appError{err, "Search Client", 500}
 	}
-	return writeJson(rw, req, rows, 200)
+	result, err := group.GetResult(r, search, false)
+	if err != nil {
+		return &appError{err, "Search Process results", 500}
+	}
+	return writeJson(rw, req, result, 200)
 }
 
 func Serve(registry *registry.Registry) {
@@ -132,14 +183,10 @@ func Serve(registry *registry.Registry) {
 	}
 	defer c.Close()
 	router := mux.NewRouter().StrictSlash(true)
-	router.Handle("/document/", appHandler(documentsHandler)).Methods("GET", "DELETE")
-	router.Handle("/document/test/", appHandler(testHandler)).Methods("POST")
-	router.Handle("/document/{doctypes:(((\\d+-\\d+):?|(\\d+):?))+}/", appHandler(documentsHandler)).Methods("GET", "DELETE")
-	router.Handle("/document/{doctype:[0-9]+}/{docid:[0-9]+}/", appHandler(documentHandler)).Methods("GET", "POST", "DELETE")
-	router.Handle("/queue/", appHandler(queueHandler)).Methods("GET")
-	router.Handle("/queue/{id:[0-9a-f]{24}}/", appHandler(queueItemHandler)).Methods("GET")
-	router.Handle("/index/", appHandler(indexHandler)).Methods("GET")
-	router.Handle("/search/", appHandler(searchHandler)).Methods("POST")
+	for _, r := range routes {
+		path := fmt.Sprintf(r.path, r.regexes...)
+		router.Handle(path, appHandler(r.fn)).Methods(r.methods...)
+	}
 	log.Println("Starting API server on:", registry.ApiListener.Addr().String())
 	registry.Routines.Add(1)
 	http.Serve(registry.ApiListener, router)
