@@ -33,11 +33,11 @@ type DocumentID struct {
 type Document struct {
 	Id             DocumentID    `json:"id" bson:"_id"`
 	Title          string        `json:"title"`
-	Text           string        `json:",omitempty"`
+	Text           string        `json:"text,omitempty"`
 	Length         uint64        `json:"characters"`
 	Valid          bool          `json:"valid"`
 	Meta           MetaMap       `json:"metaData,omitempty"`
-	Associations   *Associations `json:",omitempty"`
+	Associations   *Associations `json:"associations,omitempty"`
 	hashes         map[HashKey][]uint64
 	blooms         map[BloomKey]Bloom
 	normalisedText *utf8string.String
