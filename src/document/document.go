@@ -1,8 +1,8 @@
 package document
 
 import (
+	"code.google.com/p/go.exp/utf8string"
 	"errors"
-	"exp/utf8string"
 	"fmt"
 	"github.com/donovanhide/mux"
 	"net/http"

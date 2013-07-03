@@ -17,7 +17,14 @@ type flags struct {
 	ApiAddress       string
 	MongoUrl         string
 	PostingAddresses addresses
+	Feeds            feeds
 	InitialQuery     query
+}
+
+type FeedConfig struct {
+	Url         string
+	LastEventId string
+	lock        sync.Mutex
 }
 
 type PostingConfig struct {
@@ -40,6 +47,7 @@ type Registry struct {
 	ApiAddress       string
 	PostingListeners []net.Listener
 	PostingConfigs   []PostingConfig
+	FeedConfigs      []FeedConfig
 	session          *mgo.Session
 	flags            *flags
 }
@@ -65,6 +73,7 @@ func parseFlags(args []string) *flags {
 	flags.StringVar(&f.ApiAddress, "api_address", "127.0.0.1:8080", "Address for API to listen on.")
 	flags.StringVar(&f.MongoUrl, "mongo_url", "127.0.0.1:27017/superfastmatch", "Url to connect to MongoDB with.")
 	flags.Var(&f.PostingAddresses, "posting_addresses", "Comma-separated list of addresses for Posting Servers.")
+	flags.Var(&f.Feeds, "feeds", "Comma-separated list of addresses for eventsource feeds.")
 	flags.Parse(args)
 	return &f
 }
@@ -116,6 +125,11 @@ func (r *Registry) Open() {
 				Address:      postingAddress,
 			}
 			r.PostingConfigs = append(r.PostingConfigs, p)
+		}
+		for _, feed := range r.flags.Feeds {
+			r.FeedConfigs = append(r.FeedConfigs, FeedConfig{
+				Url: feed,
+			})
 		}
 	}
 }

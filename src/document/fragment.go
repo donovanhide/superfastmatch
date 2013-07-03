@@ -2,7 +2,7 @@ package document
 
 import (
 	"bytes"
-	"exp/utf8string"
+	"code.google.com/p/go.exp/utf8string"
 	"fmt"
 	"hash/fnv"
 	"reflect"

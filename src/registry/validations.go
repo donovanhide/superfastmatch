@@ -14,6 +14,7 @@ type windowSize int
 type groupSize uint64
 type addresses []string
 type query string
+type feeds []string
 
 func checkErr(err error) {
 	if err != nil {
@@ -69,6 +70,15 @@ func (g *groupSize) Set(value string) error {
 
 func (g *groupSize) String() string {
 	return fmt.Sprintf("%d", *g)
+}
+
+func (f *feeds) Set(value string) error {
+	*f = strings.Split(value, ",")
+	return nil
+}
+
+func (f *feeds) String() string {
+	return fmt.Sprintf("%v", *f)
 }
 
 func (a *addresses) Set(value string) error {

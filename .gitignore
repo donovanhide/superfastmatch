@@ -15,3 +15,5 @@ src/github.com/donovanhide/mux/
 src/github.com/gorilla/context/
 
 src/github.com/gorilla/schema/
+
+src/github.com/donovanhide/eventsource/

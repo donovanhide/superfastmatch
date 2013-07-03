@@ -31,10 +31,12 @@ func main() {
 			posting.Serve(registry)
 		case "api":
 			go queue.Start(registry)
+			go api.MonitorFeeds(registry)
 			go api.Serve(registry)
 		case "standalone":
 			posting.Serve(registry)
 			go queue.Start(registry)
+			go api.MonitorFeeds(registry)
 			go api.Serve(registry)
 		}
 		<-sig
