@@ -42,3 +42,5 @@ dependencies:
 	go get -u github.com/donovanhide/mux/
 	go get -u github.com/gorilla/schema
 	go get -u labix.org/v2/mgo
+	go get -u code.google.com/p/go.exp/utf8string
+	go get -u github.com/donovanhide/eventsource
