@@ -1,49 +1,60 @@
 package document
 
 import (
+	. "launchpad.net/gocheck"
 	"testing"
+	"testutils"
 )
 
-func Test_4598(t *testing.T) {
-	doc, _ := BuildDocument(0, 0, "4598", openFile("../../fixtures/4598.txt.gz"), nil)
+func Test(t *testing.T) { TestingT(t) }
+
+type DocumentSuite struct {
+	testutils.DBSuite
+}
+
+var _ = Suite(&DocumentSuite{})
+
+func (s *DocumentSuite) Test_4598(c *C) {
+	doc, err := BuildDocument(0, 0, "4598", openFile("../../fixtures/4598.txt.gz"), nil)
+	c.Check(err, IsNil)
 	key := HashKey{WindowSize: 30, HashWidth: 32}
 	length := len(doc.Hashes(key))
-	if length != 306153 {
-		t.Errorf("Wrong number of hashes: %v", length)
-	}
+	c.Check(length, Equals, 306153) // Wrong number of hashes
 }
 
-func Test_NormalisedText(t *testing.T) {
+func (s *DocumentSuite) Test_NormalisedText(c *C) {
 	doc1, _ := BuildDocument(1, 1, "This is a test", "This is some text,!&", nil)
 	doc2, _ := BuildDocument(1, 1, "This is a test", "THIS IS SOME TEXT   ", nil)
-	if doc1.NormalisedText().String() != doc2.NormalisedText().String() {
-		t.Error("Bad text normalisation")
-	}
+	c.Check(doc1.NormalisedText().String(), Equals, doc2.NormalisedText().String()) //Bad text normalisation
 }
 
-func Test_Hashes(t *testing.T) {
+func (s *DocumentSuite) Test_Hashes(c *C) {
 	doc, _ := BuildDocument(1, 1, "This is a test", "Text gobble TEXT", nil)
 	key := HashKey{WindowSize: 4, HashWidth: 32}
-	if len(doc.Hashes(key)) != 13 {
-		t.Errorf("Wrong number of hashes: %v", len(doc.Hashes(key)))
-	}
+	c.Check(len(doc.Hashes(key)), Equals, 13, Commentf("Wrong number of hashes: %v", len(doc.Hashes(key))))
 	firstHash := doc.Hashes(key)[0]
 	lastHash := doc.Hashes(key)[12]
-	if firstHash != lastHash {
-		t.Errorf("Incorrect hashes created: %v %v %v", firstHash, lastHash, doc.Hashes(key))
-	}
+	c.Check(firstHash, Equals, lastHash, Commentf("Incorrect hashes created: %v %v %v", firstHash, lastHash, doc.Hashes(key)))
 }
 
-func Test_TestDocument(t *testing.T) {
+func (s *DocumentSuite) Test_TestDocument(c *C) {
 	id := &DocumentID{
 		Doctype: 1,
 		Docid:   1,
 	}
 	doc, err := NewTestDocument(id, 100)
-	if err != nil {
-		t.Errorf(err.Error())
-	}
-	if doc.Length == 0 {
-		t.Errorf("Bad Test Document")
-	}
+	c.Check(err, IsNil)
+	c.Check(doc.Length, Not(Equals), 0) //Bad Test Document
+}
+
+func (s *DocumentSuite) Test_GenerateDocumentId(c *C) {
+	id, err := GenerateDocumentId(s.Registry, 1)
+	c.Check(id.Docid, Equals, uint32(1))
+	c.Check(err, IsNil)
+	id, err = GenerateDocumentId(s.Registry, 1)
+	c.Check(id.Docid, Equals, uint32(2))
+	c.Check(err, IsNil)
+	id, err = GenerateDocumentId(s.Registry, 2)
+	c.Check(id.Docid, Equals, uint32(1))
+	c.Check(err, IsNil)
 }

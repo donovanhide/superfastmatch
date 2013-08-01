@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"labix.org/v2/mgo"
+	"labix.org/v2/mgo/bson"
 	"log"
 	"net"
 	"sync"
@@ -17,14 +18,8 @@ type flags struct {
 	ApiAddress       string
 	MongoUrl         string
 	PostingAddresses addresses
-	Feeds            feeds
+	Feeds            string
 	InitialQuery     query
-}
-
-type FeedConfig struct {
-	Url         string
-	LastEventId string
-	lock        sync.Mutex
 }
 
 type PostingConfig struct {
@@ -47,7 +42,7 @@ type Registry struct {
 	ApiAddress       string
 	PostingListeners []net.Listener
 	PostingConfigs   []PostingConfig
-	FeedConfigs      []FeedConfig
+	Feeds            string
 	session          *mgo.Session
 	flags            *flags
 }
@@ -73,7 +68,7 @@ func parseFlags(args []string) *flags {
 	flags.StringVar(&f.ApiAddress, "api_address", "127.0.0.1:8080", "Address for API to listen on.")
 	flags.StringVar(&f.MongoUrl, "mongo_url", "127.0.0.1:27017/superfastmatch", "Url to connect to MongoDB with.")
 	flags.Var(&f.PostingAddresses, "posting_addresses", "Comma-separated list of addresses for Posting Servers.")
-	flags.Var(&f.Feeds, "feeds", "Comma-separated list of addresses for eventsource feeds.")
+	flags.StringVar(&f.Feeds, "feeds", "", "Path to JSON file containing feed configuration.")
 	flags.Parse(args)
 	return &f
 }
@@ -100,6 +95,7 @@ func (r *Registry) Open() {
 	r.HashWidth = uint64(r.flags.HashWidth)
 	r.WindowSize = uint64(r.flags.WindowSize)
 	r.ApiAddress = r.flags.ApiAddress
+	r.Feeds = r.flags.Feeds
 	if r.session, err = mgo.Dial(r.flags.MongoUrl); err != nil {
 		log.Fatalf("Error connecting to mongo instance: %s", err)
 	}
@@ -125,11 +121,6 @@ func (r *Registry) Open() {
 				Address:      postingAddress,
 			}
 			r.PostingConfigs = append(r.PostingConfigs, p)
-		}
-		for _, feed := range r.flags.Feeds {
-			r.FeedConfigs = append(r.FeedConfigs, FeedConfig{
-				Url: feed,
-			})
 		}
 	}
 }
@@ -165,4 +156,19 @@ func (r *Registry) DropDatabase() error {
 
 func (r *Registry) C(name string) *mgo.Collection {
 	return r.session.Clone().DB("").C(name)
+}
+
+func (r *Registry) IncrementCounter(id string) (uint32, error) {
+	var result struct {
+		Seq uint32
+	}
+	change := mgo.Change{
+		Update:    bson.M{"$inc": bson.M{"seq": 1}},
+		ReturnNew: true,
+		Upsert:    true,
+	}
+	if _, err := r.C("counter").FindId(id).Apply(change, &result); err != nil {
+		return 0, err
+	}
+	return result.Seq, nil
 }

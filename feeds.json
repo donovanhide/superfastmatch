@@ -1,0 +1,26 @@
+[
+	{
+		"doctype": 1, 
+		"name": "Tescos",
+		"url": "http://feed.churnalism.com/tesco/",
+		"lastEventId": "0"
+	},
+	{
+		"doctype": 2,
+		"name": "Asda",
+		"url": "http://feed.churnalism.com/asda/",
+		"lastEventId": "0"
+	},
+	{
+		"doctype": 3,
+		"name": "Sainsburys",
+		"url": "http://feed.churnalism.com/sainsburys/",
+		"lastEventId": "0"
+	},
+	{
+		"doctype": 4,
+		"name": "72 Point",
+		"url": "http://feed.churnalism.com/72point/",
+		"lastEventId": "0"
+	}
+]

@@ -72,7 +72,7 @@ var types = []struct {
 	{"Dynamic", NewDynamicBloom},
 }
 
-func TestBenchmark(t *testing.T) {
+func TestBenchmarkSlow(t *testing.T) {
 	r := buildRandom()
 	results := "Bloom Benchmark\n"
 	for _, bench := range benchmarks {
