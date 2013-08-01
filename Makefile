@@ -38,14 +38,6 @@ test:
 	mongo/bin/mongo admin --eval "db.shutdownServer()"
 
 dependencies:
-<<<<<<< HEAD
 	go get -v superfastmatch
 	go get -v launchpad.net/gocheck
-=======
-	go get -u launchpad.net/gocheck
-	go get -u github.com/donovanhide/mux/
-	go get -u github.com/gorilla/schema
-	go get -u labix.org/v2/mgo
-	go get -u code.google.com/p/go.exp/utf8string
-	go get -u github.com/donovanhide/eventsource
->>>>>>> 66c1aaa8a2d73f0ee4e69bcb59c80ba99488d7d3
+
