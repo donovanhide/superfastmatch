@@ -1,5 +1,3 @@
-export GOPATH := $(shell pwd)
-
 PKGS=$(notdir $(wildcard src/*))
 
 run:
@@ -39,5 +37,5 @@ test:
 
 dependencies:
 	go get -v superfastmatch
-	go get -v launchpad.net/gocheck
+	go get -v -t registry
 

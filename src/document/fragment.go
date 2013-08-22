@@ -59,7 +59,9 @@ func newTheme(text string) *Theme {
 }
 
 func (m ThemeMap) Save(registry *registry.Registry) error {
-	return registry.C("theme").Insert(reflect.ValueOf(m).MapKeys())
+	db := registry.DB()
+	defer db.Session.Close()
+	return db.C("theme").Insert(reflect.ValueOf(m).MapKeys())
 }
 
 func (m ThemeMap) Sort() ThemeSlice {

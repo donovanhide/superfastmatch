@@ -57,7 +57,9 @@ func (s *QuerySuite) TestFillDocumentQuery(c *C) {
 	q := new(DocumentQueryParams)
 	decoder.Decode(q, *values)
 	q.DefaultSort = []string{"doctype", "docid"}
-	q.getQuery(values, s.Registry.C("documents"))
+	db := s.Registry.DB()
+	defer db.Session.Close()
+	q.getQuery(values, db.C("documents"))
 	c.Check(q.Doctypes, Equals, DocTypeRange("1"))
 	c.Check(q.Limit, Equals, 20)
 	c.Check(q.Sort, DeepEquals, []string{"text", "doctype", "docid"})

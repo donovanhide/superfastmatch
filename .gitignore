@@ -13,3 +13,7 @@ superfastmatch
 src/github.com/*
 src/labix.org/*
 src/launchpad.net/*
+
+*.sublime-project
+
+*.sublime-workspace

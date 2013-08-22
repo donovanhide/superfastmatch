@@ -94,7 +94,9 @@ func GetDocuments(values *url.Values, registry *registry.Registry) (*DocumentRes
 	}
 	q.Select = bson.M{"text": 0}
 	q.DefaultSort = []string{"doctype", "docid"}
-	docs := q.getQuery(values, registry.C("documents"))
+	db := registry.DB()
+	defer db.Session.Close()
+	docs := q.getQuery(values, db.C("documents"))
 	if err := docs.All(&r.Rows); err != nil {
 		return nil, err
 	}
@@ -106,8 +108,10 @@ func GetDocuments(values *url.Values, registry *registry.Registry) (*DocumentRes
 
 func GetDocids(docTypeRange string, registry *registry.Registry) ([]document.DocumentID, error) {
 	docs := make([]document.DocumentID, 0)
+	db := registry.DB()
+	defer db.Session.Close()
 	query := DocTypeRange(docTypeRange).Parse()
 	pipe := []bson.M{{"$project": bson.M{"doctype": "$_id.doctype", "docid": "$_id.docid"}}, {"$match": query}}
-	err := registry.C("documents").Pipe(pipe).All(&docs)
+	err := db.C("documents").Pipe(pipe).All(&docs)
 	return docs, err
 }

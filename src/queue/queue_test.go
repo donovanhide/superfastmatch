@@ -49,7 +49,9 @@ func (s *QuerySuite) TestQueue(c *C) {
 	c.Check(stats["Completed"], Equals, 20)
 	c.Check(stats["Queued"], Equals, 0)
 	c.Check(stats["Failed"], Equals, 0)
-	count, err := s.Registry.C("documents").Count()
+	db := s.Registry.DB()
+	defer db.Session.Close()
+	count, err := db.C("documents").Count()
 	c.Check(err, IsNil)
 	c.Check(count, Equals, 20)
 	for i := uint32(1); i <= 20; i++ {
@@ -64,7 +66,7 @@ func (s *QuerySuite) TestQueue(c *C) {
 	c.Check(stats["Completed"], Equals, 40)
 	c.Check(stats["Queued"], Equals, 0)
 	c.Check(stats["Failed"], Equals, 0)
-	count, err = s.Registry.C("documents").Count()
+	count, err = db.C("documents").Count()
 	c.Check(err, IsNil)
 	c.Check(count, Equals, 0)
 }
@@ -75,7 +77,9 @@ func (s *QuerySuite) TestPayload(c *C) {
 	item, err := NewQueueItem(s.Registry, "test", nil, nil, "", "", strings.NewReader("I am the payload"))
 	c.Check(err, IsNil)
 	var q QueueItem
-	s.Registry.C("queue").FindId(item.Id).One(&q)
+	db := s.Registry.DB()
+	defer db.Session.Close()
+	db.C("queue").FindId(item.Id).One(&q)
 	c.Check(q.Payload, NotNil)
 	p, err := q.getPayload()
 	c.Check(p, Equals, "I am the payload")

@@ -71,12 +71,16 @@ func NewQueueItem(registry *registry.Registry, command string,
 }
 
 func (q *QueueItem) Save(registry *registry.Registry) error {
-	_, err := registry.C("queue").UpsertId(q.Id, q)
+	db := registry.DB()
+	defer db.Session.Close()
+	_, err := db.C("queue").UpsertId(q.Id, q)
 	return err
 }
 
 func (q *QueueItem) UpdateStatus(registry *registry.Registry, status string) error {
-	return registry.C("queue").UpdateId(q.Id, bson.M{"$set": bson.M{"status": status}})
+	db := registry.DB()
+	defer db.Session.Close()
+	return db.C("queue").UpdateId(q.Id, bson.M{"$set": bson.M{"status": status}})
 }
 
 func (q *QueueItem) getPayload() (string, error) {
@@ -144,7 +148,9 @@ func Start(registry *registry.Registry) {
 	if err = client.Initialise(); err != nil {
 		panic(err)
 	}
-	queue := registry.C("queue")
+	db := registry.DB()
+	defer db.Session.Close()
+	queue := db.C("queue")
 	registry.Routines.Add(1)
 	ticker := time.NewTicker(time.Second)
 	for {
@@ -178,7 +184,9 @@ func Start(registry *registry.Registry) {
 
 func GetQueue(values url.Values, registry *registry.Registry) (*QueueResult, error) {
 	var items []QueueItem
-	if err := registry.C("queue").Find(nil).Select(bson.M{"payload": 0}).All(&items); err != nil {
+	db := registry.DB()
+	defer db.Session.Close()
+	if err := db.C("queue").Find(nil).Select(bson.M{"payload": 0}).All(&items); err != nil {
 		return nil, fmt.Errorf("Queue item not found: %s", err)
 	}
 	return &QueueResult{
@@ -190,7 +198,9 @@ func GetQueue(values url.Values, registry *registry.Registry) (*QueueResult, err
 
 func getQueueItem(id bson.ObjectId, registry *registry.Registry) (*QueueItem, error) {
 	var item QueueItem
-	if err := registry.C("queue").FindId(id).Select(bson.M{"payload": 0}).One(&item); err != nil {
+	db := registry.DB()
+	defer db.Session.Close()
+	if err := db.C("queue").FindId(id).Select(bson.M{"payload": 0}).One(&item); err != nil {
 		return nil, fmt.Errorf("Queue item not found: %s", err)
 	}
 	return &item, nil
@@ -212,7 +222,9 @@ func Stats(registry *registry.Registry) (map[string]int, error) {
 		Id    string "_id"
 		Value int
 	}
-	_, err := registry.C("queue").Find(nil).MapReduce(job, &result)
+	db := registry.DB()
+	defer db.Session.Close()
+	_, err := db.C("queue").Find(nil).MapReduce(job, &result)
 	if err != nil {
 		return nil, newQueueError("Queue Map Reduce Stats:", err)
 	}

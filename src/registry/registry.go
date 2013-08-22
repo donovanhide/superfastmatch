@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"labix.org/v2/mgo"
-	"labix.org/v2/mgo/bson"
 	"log"
 	"net"
 	"sync"
@@ -154,21 +153,7 @@ func (r *Registry) DropDatabase() error {
 	return r.session.DB("").DropDatabase()
 }
 
-func (r *Registry) C(name string) *mgo.Collection {
-	return r.session.Clone().DB("").C(name)
-}
-
-func (r *Registry) IncrementCounter(id string) (uint32, error) {
-	var result struct {
-		Seq uint32
-	}
-	change := mgo.Change{
-		Update:    bson.M{"$inc": bson.M{"seq": 1}},
-		ReturnNew: true,
-		Upsert:    true,
-	}
-	if _, err := r.C("counter").FindId(id).Apply(change, &result); err != nil {
-		return 0, err
-	}
-	return result.Seq, nil
+// Sessions belonging to database must be closed!
+func (r *Registry) DB() *mgo.Database {
+	return r.session.Clone().DB("")
 }

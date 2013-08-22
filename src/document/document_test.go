@@ -46,15 +46,3 @@ func (s *DocumentSuite) Test_TestDocument(c *C) {
 	c.Check(err, IsNil)
 	c.Check(doc.Length, Not(Equals), 0) //Bad Test Document
 }
-
-func (s *DocumentSuite) Test_GenerateDocumentId(c *C) {
-	id, err := GenerateDocumentId(s.Registry, 1)
-	c.Check(id.Docid, Equals, uint32(1))
-	c.Check(err, IsNil)
-	id, err = GenerateDocumentId(s.Registry, 1)
-	c.Check(id.Docid, Equals, uint32(2))
-	c.Check(err, IsNil)
-	id, err = GenerateDocumentId(s.Registry, 2)
-	c.Check(id.Docid, Equals, uint32(1))
-	c.Check(err, IsNil)
-}

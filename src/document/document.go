@@ -119,7 +119,9 @@ func NewDocument(id *DocumentID, values *url.Values) (*Document, error) {
 
 func GetDocument(id *DocumentID, registry *registry.Registry) (*Document, error) {
 	doc := &Document{Id: *id}
-	if err := registry.C("documents").FindId(doc.Id).One(doc); err != nil {
+	db := registry.DB()
+	defer db.Session.Close()
+	if err := db.C("documents").FindId(doc.Id).One(doc); err != nil {
 		return nil, err
 	}
 	return doc.init(), nil
@@ -139,12 +141,16 @@ func GetDocuments(ids []DocumentID, registry *registry.Registry) chan *Document 
 }
 
 func (document *Document) Save(registry *registry.Registry) error {
-	_, err := registry.C("documents").UpsertId(document.Id, document)
+	db := registry.DB()
+	defer db.Session.Close()
+	_, err := db.C("documents").UpsertId(document.Id, document)
 	return err
 }
 
 func (document *Document) Delete(registry *registry.Registry) error {
-	return registry.C("documents").RemoveId(document.Id)
+	db := registry.DB()
+	defer db.Session.Close()
+	return db.C("documents").RemoveId(document.Id)
 }
 
 func (d *Document) AddAssociation(registry *registry.Registry, other *Document, saveThemes bool) *Association {
