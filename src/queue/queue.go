@@ -163,20 +163,24 @@ func Start(registry *registry.Registry) {
 		case <-ticker.C:
 			start := time.Now()
 			var items QueueItemSlice
-			if err := queue.Find(bson.M{"status": "Queued"}).Sort("_id").Limit(10).All(&items); err != nil {
-				panic(err)
-			}
-			for i, item := range items {
-				if item.Command != items[0].Command {
-					items = items[:i]
+			for {
+				if err := queue.Find(bson.M{"status": "Queued"}).Sort("_id").Limit(10).All(&items); err != nil {
+					panic(err)
+				}
+				for i, item := range items {
+					if item.Command != items[0].Command {
+						items = items[:i]
+						break
+					}
+				}
+				if err := items.Execute(registry, client); err != nil {
+					log.Println(err)
+				}
+				if len(items) > 0 {
+					log.Printf("Executed %d Queue items in %.2f secs", len(items), time.Now().Sub(start).Seconds())
+				} else {
 					break
 				}
-			}
-			if err := items.Execute(registry, client); err != nil {
-				log.Println(err)
-			}
-			if len(items) > 0 {
-				log.Printf("Executed %d Queue items in %.2f secs", len(items), time.Now().Sub(start).Seconds())
 			}
 		}
 	}
