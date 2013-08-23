@@ -1,8 +1,8 @@
 package posting
 
 import (
-	"github.com/donovanhide/superfastmatch-go/document"
-	"github.com/donovanhide/superfastmatch-go/registry"
+	"github.com/donovanhide/superfastmatch/document"
+	"github.com/donovanhide/superfastmatch/registry"
 	"github.com/gorilla/schema"
 	"net/rpc"
 	"net/url"

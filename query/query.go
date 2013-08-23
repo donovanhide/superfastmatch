@@ -1,8 +1,8 @@
 package query
 
 import (
-	"github.com/donovanhide/superfastmatch-go/document"
-	"github.com/donovanhide/superfastmatch-go/registry"
+	"github.com/donovanhide/superfastmatch/document"
+	"github.com/donovanhide/superfastmatch/registry"
 	"github.com/gorilla/schema"
 	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"

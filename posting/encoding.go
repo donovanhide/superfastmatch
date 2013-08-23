@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"container/list"
 	"fmt"
-	"github.com/donovanhide/superfastmatch-go/document"
+	"github.com/donovanhide/superfastmatch/document"
 	"io"
 )
 

@@ -1,7 +1,7 @@
 package testutils
 
 import (
-	"github.com/donovanhide/superfastmatch-go/registry"
+	"github.com/donovanhide/superfastmatch/registry"
 	. "launchpad.net/gocheck"
 )
 

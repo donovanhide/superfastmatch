@@ -1,8 +1,8 @@
 package query
 
 import (
-	"github.com/donovanhide/superfastmatch-go/document"
-	"github.com/donovanhide/superfastmatch-go/testutils"
+	"github.com/donovanhide/superfastmatch/document"
+	"github.com/donovanhide/superfastmatch/testutils"
 	. "launchpad.net/gocheck"
 	"net/http"
 	"net/url"

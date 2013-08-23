@@ -1,7 +1,7 @@
 package document
 
 import (
-	"github.com/donovanhide/superfastmatch-go/testutils"
+	"github.com/donovanhide/superfastmatch/testutils"
 	. "launchpad.net/gocheck"
 	"testing"
 )

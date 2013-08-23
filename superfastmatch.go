@@ -1,10 +1,10 @@
 package main
 
 import (
-	"github.com/donovanhide/superfastmatch-go/api"
-	"github.com/donovanhide/superfastmatch-go/posting"
-	"github.com/donovanhide/superfastmatch-go/queue"
-	"github.com/donovanhide/superfastmatch-go/registry"
+	"github.com/donovanhide/superfastmatch/api"
+	"github.com/donovanhide/superfastmatch/posting"
+	"github.com/donovanhide/superfastmatch/queue"
+	"github.com/donovanhide/superfastmatch/registry"
 	"log"
 	"net/http"
 	_ "net/http/pprof"

@@ -3,7 +3,7 @@ package document
 import (
 	"bytes"
 	"fmt"
-	"github.com/donovanhide/superfastmatch-go/registry"
+	"github.com/donovanhide/superfastmatch/registry"
 	"github.com/gorilla/schema"
 	"net/url"
 	"sort"

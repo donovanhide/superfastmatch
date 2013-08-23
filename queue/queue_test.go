@@ -1,9 +1,9 @@
 package queue
 
 import (
-	"github.com/donovanhide/superfastmatch-go/document"
-	"github.com/donovanhide/superfastmatch-go/posting"
-	"github.com/donovanhide/superfastmatch-go/testutils"
+	"github.com/donovanhide/superfastmatch/document"
+	"github.com/donovanhide/superfastmatch/posting"
+	"github.com/donovanhide/superfastmatch/testutils"
 	. "launchpad.net/gocheck"
 	"strings"
 	"testing"

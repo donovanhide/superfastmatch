@@ -3,10 +3,10 @@ package queue
 import (
 	"errors"
 	"fmt"
-	"github.com/donovanhide/superfastmatch-go/document"
-	"github.com/donovanhide/superfastmatch-go/posting"
-	"github.com/donovanhide/superfastmatch-go/query"
-	"github.com/donovanhide/superfastmatch-go/registry"
+	"github.com/donovanhide/superfastmatch/document"
+	"github.com/donovanhide/superfastmatch/posting"
+	"github.com/donovanhide/superfastmatch/query"
+	"github.com/donovanhide/superfastmatch/registry"
 	"log"
 )
 

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/donovanhide/mux"
-	"github.com/donovanhide/superfastmatch-go/registry"
+	"github.com/donovanhide/superfastmatch/registry"
 	"net/http"
 	"net/url"
 	"strconv"

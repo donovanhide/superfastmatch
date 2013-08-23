@@ -3,9 +3,9 @@ package api
 import (
 	"flag"
 	"fmt"
-	"github.com/donovanhide/superfastmatch-go/document"
-	"github.com/donovanhide/superfastmatch-go/queue"
-	"github.com/donovanhide/superfastmatch-go/registry"
+	"github.com/donovanhide/superfastmatch/document"
+	"github.com/donovanhide/superfastmatch/queue"
+	"github.com/donovanhide/superfastmatch/registry"
 	"io"
 	"io/ioutil"
 	"net/http"

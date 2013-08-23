@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"code.google.com/p/go.exp/utf8string"
 	"fmt"
-	"github.com/donovanhide/superfastmatch-go/registry"
+	"github.com/donovanhide/superfastmatch/registry"
 	"hash/fnv"
 	"reflect"
 	"sort"

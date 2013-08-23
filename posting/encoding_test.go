@@ -2,7 +2,7 @@ package posting
 
 import (
 	"bytes"
-	"github.com/donovanhide/superfastmatch-go/document"
+	"github.com/donovanhide/superfastmatch/document"
 	. "launchpad.net/gocheck"
 	"math/rand"
 )
