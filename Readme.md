@@ -12,7 +12,7 @@ One of:
 * 64 bit Windows
 * 64 bit OS-X
 
-and a working install of Mongo DB 2.2. Details [here](http://docs.mongodb.org/manual/installation/)
+and a working install of Mongo DB 2.2 or higher. Details [here](http://docs.mongodb.org/manual/installation/)
 
 Binary Downloads
 ----------------
