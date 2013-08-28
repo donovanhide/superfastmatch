@@ -9,11 +9,11 @@ import (
 	"github.com/donovanhide/superfastmatch/document"
 	"github.com/donovanhide/superfastmatch/posting"
 	"github.com/donovanhide/superfastmatch/registry"
+	"github.com/golang/glog"
 	"io"
 	"io/ioutil"
 	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
-	"log"
 	"net/url"
 	"time"
 )
@@ -138,7 +138,7 @@ func (q *QueueItem) String() string {
 }
 
 func Start(registry *registry.Registry) {
-	log.Println("Starting Queue Processor")
+	glog.Infoln("Starting Queue Processor")
 	registry.Queue = make(chan bool)
 	client, err := posting.NewClient(registry)
 	if err != nil {
@@ -156,7 +156,7 @@ func Start(registry *registry.Registry) {
 	for {
 		select {
 		case <-registry.Queue:
-			log.Println("Queue Processor Stopped")
+			glog.Infoln("Queue Processor Stopped")
 			ticker.Stop()
 			registry.Routines.Done()
 			return
@@ -174,10 +174,10 @@ func Start(registry *registry.Registry) {
 					}
 				}
 				if err := items.Execute(registry, client); err != nil {
-					log.Println(err)
+					glog.Errorln(err)
 				}
 				if len(items) > 0 {
-					log.Printf("Executed %d Queue items in %.2f secs", len(items), time.Now().Sub(start).Seconds())
+					glog.Infof("Executed %d Queue items in %.2f secs", len(items), time.Now().Sub(start).Seconds())
 				} else {
 					break
 				}

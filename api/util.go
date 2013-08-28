@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/donovanhide/mux"
+	"github.com/golang/glog"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 )
@@ -21,7 +21,7 @@ type appHandler func(http.ResponseWriter, *http.Request) *appError
 
 func (fn appHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	if e := fn(rw, r); e != nil {
-		log.Printf("%v: %v: %v", e.Code, e.Error, e.Message)
+		glog.Errorf("%v: %v: %v", e.Code, e.Error, e.Message)
 		http.Error(rw, fmt.Sprintf("Main Error: %v\nDetails: %v", e.Error, e.Message), e.Code)
 	}
 }

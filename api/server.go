@@ -8,7 +8,7 @@ import (
 	"github.com/donovanhide/superfastmatch/query"
 	"github.com/donovanhide/superfastmatch/queue"
 	"github.com/donovanhide/superfastmatch/registry"
-	"log"
+	"github.com/golang/glog"
 	"net/http"
 )
 
@@ -187,9 +187,9 @@ func Serve(registry *registry.Registry) {
 		path := fmt.Sprintf(r.path, r.regexes...)
 		router.Handle(path, appHandler(r.fn)).Methods(r.methods...)
 	}
-	log.Println("Starting API server on:", registry.ApiListener.Addr().String())
+	glog.Infoln("Starting API server on:", registry.ApiListener.Addr().String())
 	registry.Routines.Add(1)
 	http.Serve(registry.ApiListener, router)
-	log.Println("Stopping API server")
+	glog.Infoln("Stopping API server")
 	registry.Routines.Done()
 }

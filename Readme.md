@@ -14,18 +14,17 @@ One of:
 
 and a working install of Mongo DB 2.2 or higher. Details [here](http://docs.mongodb.org/manual/installation/)
 
-Binary Downloads
-----------------
+Installation from source
+------------------------
 
-* [Linux](https://raw.github.com/donovanhide/superfastmatch-go/master/builds/superfastmatch-linux)
-* [Windows](https://raw.github.com/donovanhide/superfastmatch-go/master/builds/superfastmatch.exe)
-* [OS X](https://raw.github.com/donovanhide/superfastmatch-go/master/builds/superfastmatch-darwin)
-
-For Linux and OS X you might have to add the execution bit, for example on OS X:
+Go 1.1 is required to build (installation instructions [here](http://golang.org/doc/install)). Also required are [git](http://git-scm.com/), [bzr](http://bazaar.canonical.com/en/) and [mercurial](http://mercurial.selenic.com/) to enable the dependencies to be checked out.
 
 ```bash
-curl https://raw.github.com/donovanhide/superfastmatch-go/master/builds/superfastmatch-darwin -o superfastmatch
-chmod +x ./superfastmatch
+mkdir gopath
+cd gopath
+export GOPATH=`pwd`
+go get github.com/donovanhide/superfastmatch
+./bin/superfastmatch -logtostderr
 ```
 
 Example usage
@@ -36,7 +35,7 @@ Example usage
 Start superfastmatch in one terminal:
 
 ```bash
-$ ./superfastmatch
+$ ./superfastmatch -logtostderr
 2013/01/27 22:58:56 Started in standalone mode with Hash Width: 24 and Window Size: 30
 2013/01/27 22:58:56 Starting Posting Server on: 127.0.0.1:8090
 2013/01/27 22:58:56 Starting Queue Processor
@@ -51,7 +50,7 @@ $ ./superfastmatch
 In another load some books by Charles Dickens:
 
 ```bash
-$ ./superfastmatch add fixtures/gutenberg/Dickens.tar.gz 
+$ ./superfastmatch client add fixtures/gutenberg/Dickens.tar.gz 
 Entering:	Dickens.tar.gz
 Command: Add Document Target: (1,1)
 Added:	Doctype:   1	Docid:   1	Title: bleak_house.txt	QueueId: 5105b40e7b1d26385300000d
@@ -79,7 +78,7 @@ Successes: 10	 Failures:0
 And then search for the bible in this collection of documents:
 
 ```bash
-$ ./superfastmatch search fixtures/gutenberg/bible.txt.gz 
+$ ./superfastmatch client search fixtures/gutenberg/bible.txt.gz 
 Doc:bleak_house.txt (1,1)	Left:  3728816	Right:    48538	Length:       67	Text: He that is without sin among you, let him first cast a st...
 Doc:bleak_house.txt (1,1)	Left:  3728739	Right:    48461	Length:       55	Text: So when they continued asking him, he lifted up himself
 Doc:bleak_house.txt (1,1)	Left:  3532111	Right:    48773	Length:       41	Text: Lest coming suddenly he find you sleeping
@@ -148,28 +147,4 @@ Doc:david_copperfie (1,3)	Left:  3208034	Right:   673473	Length:       30	Text: 
 Doc:david_copperfie (1,3)	Left:  3354972	Right:   653547	Length:       30	Text: toil not, neither do they spin
 
 Successes: 0	 Failures:0
-```
-
-Installation from source
-------------------------
-
-The development version of Go (tip) is required to build due to various features that aren't present in 1.0. Also required are [git](http://git-scm.com/), [bzr](http://bazaar.canonical.com/en/) and [mercurial](http://mercurial.selenic.com/) to enable the dependencies to be checked out.
-
-
-```bash
-hg clone https://code.google.com/p/go/
-cd go/src
-./make.bash
-
-// Put these in your .bash_profile
-// export GOROOT=/path/to/go
-// export PATH=$PATH:/path/to/go/bin
-
-cd <working directory>
-
-git clone https://github.com/donovanhide/superfastmatch-go.git
-cd superfastmatch-go
-export GOPATH=`pwd`
-make dependencies
-make run
 ```

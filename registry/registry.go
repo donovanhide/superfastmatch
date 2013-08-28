@@ -3,8 +3,8 @@ package registry
 import (
 	"flag"
 	"fmt"
+	"github.com/golang/glog"
 	"labix.org/v2/mgo"
-	"log"
 	"net"
 	"sync"
 )
@@ -53,22 +53,21 @@ func parseFlags(args []string) *flags {
 		GroupSize:        24,
 		PostingAddresses: []string{"127.0.0.1:8090", "127.0.0.1:8091"},
 	}
-	flags := flag.NewFlagSet("flags", flag.ExitOnError)
-	flags.Usage = func() {
-		flags.PrintDefaults()
-		fmt.Println("Follow superfastmatch with either a mode or a client command to alter behaviour")
+	// flags := flag.NewFlagSet("flags", flag.ContinueOnError)
+	flag.Usage = func() {
+		fmt.Println("Follow superfastmatch with either a mode or \"client\" to alter behaviour")
 		fmt.Println("Modes: api queue posting")
-		fmt.Println("Client commands: add delete search associate")
+		flag.PrintDefaults()
 	}
-	flags.Var(&f.WindowSize, "window_size", "Specify the Window Size to use for hashing.")
-	flags.Var(&f.HashWidth, "hash_width", "Specify the number of bits to use for hashing.")
-	flags.Var(&f.GroupSize, "group_size", "Specify the block size of the sparsetable.")
-	flags.Var(&f.InitialQuery, "initial_query", "Specify the range of doctypes to load initially. Blank string equals all documents.")
-	flags.StringVar(&f.ApiAddress, "api_address", "127.0.0.1:8080", "Address for API to listen on.")
-	flags.StringVar(&f.MongoUrl, "mongo_url", "127.0.0.1:27017/superfastmatch", "Url to connect to MongoDB with.")
-	flags.Var(&f.PostingAddresses, "posting_addresses", "Comma-separated list of addresses for Posting Servers.")
-	flags.StringVar(&f.Feeds, "feeds", "", "Path to JSON file containing feed configuration.")
-	flags.Parse(args)
+	flag.Var(&f.WindowSize, "window_size", "Specify the Window Size to use for hashing.")
+	flag.Var(&f.HashWidth, "hash_width", "Specify the number of bits to use for hashing.")
+	flag.Var(&f.GroupSize, "group_size", "Specify the block size of the sparsetable.")
+	flag.Var(&f.InitialQuery, "initial_query", "Specify the range of doctypes to load initially. Blank string equals all documents.")
+	flag.StringVar(&f.ApiAddress, "api_address", "127.0.0.1:8080", "Address for API to listen on.")
+	flag.StringVar(&f.MongoUrl, "mongo_url", "127.0.0.1:27017/superfastmatch", "Url to connect to MongoDB with.")
+	flag.Var(&f.PostingAddresses, "posting_addresses", "Comma-separated list of addresses for Posting Servers.")
+	flag.StringVar(&f.Feeds, "feeds", "", "Path to JSON file containing feed configuration.")
+	flag.Parse()
 	return &f
 }
 
@@ -96,7 +95,7 @@ func (r *Registry) Open() {
 	r.ApiAddress = r.flags.ApiAddress
 	r.Feeds = r.flags.Feeds
 	if r.session, err = mgo.Dial(r.flags.MongoUrl); err != nil {
-		log.Fatalf("Error connecting to mongo instance: %s", err)
+		glog.Fatalf("Error connecting to mongo instance: %s", err)
 	}
 	if r.Mode == "posting" || r.Mode == "standalone" {
 		r.PostingListeners = make([]net.Listener, len(r.flags.PostingAddresses))

@@ -7,7 +7,7 @@ import (
 	"github.com/donovanhide/superfastmatch/query"
 	"github.com/donovanhide/superfastmatch/registry"
 	"github.com/donovanhide/superfastmatch/sparsetable"
-	"log"
+	"github.com/golang/glog"
 	"os"
 	"os/signal"
 	"sync"
@@ -15,7 +15,6 @@ import (
 )
 
 type Posting struct {
-	logger    *log.Logger
 	lock      sync.RWMutex
 	hashKey   document.HashKey
 	offset    uint64
@@ -32,7 +31,6 @@ func newPostingError(s string, err error) error {
 func newPosting(registry *registry.Registry, prefix string) *Posting {
 	return &Posting{
 		registry: registry,
-		logger:   log.New(os.Stderr, prefix+":", log.LstdFlags),
 	}
 }
 
@@ -85,7 +83,7 @@ func (p *Posting) alter(operation int, doc *document.Document) (err error) {
 		}
 		stats.count++
 		if err := p.table.Get(pos, l); err != nil {
-			panic(newPostingError("Add Document: Sparsetable Get:", err))
+			glog.Fatalln(newPostingError("Add Document: Sparsetable Get:", err))
 		}
 		switch operation {
 		case Add:
@@ -105,9 +103,9 @@ func (p *Posting) alter(operation int, doc *document.Document) (err error) {
 				case serr.Full:
 					stats.saturated++
 				case serr.ShortRead:
-					p.logger.Printf("Short Read for Document: %v Length: %v\n%v", doc.Id.String(), l.Length, l.String(true))
+					glog.Errorf("Short Read for Document: %v Length: %v\n%v", doc.Id.String(), l.Length, l.String(true))
 				default:
-					panic(newPostingError("Add Document: Sparsetable Set:", err))
+					glog.Fatalln(newPostingError("Add Document: Sparsetable Set:", err))
 				}
 			}
 		}
@@ -116,10 +114,10 @@ func (p *Posting) alter(operation int, doc *document.Document) (err error) {
 	doc.ApplyHasher(p.hashKey, alterFunc)
 	switch operation {
 	case Add:
-		p.logger.Println("Added Document:", stats.String())
+		glog.Infoln("Added Document:", stats.String())
 		p.documents++
 	case Delete:
-		p.logger.Println("Deleted Document:", stats.String())
+		glog.Infoln("Deleted Document:", stats.String())
 		p.documents--
 	}
 	return nil
@@ -145,13 +143,13 @@ func (p *Posting) search(doc *document.Document, results *document.SearchMap) (e
 		}
 		stats.count++
 		if err := p.table.Get(pos, l); err != nil {
-			panic(newPostingError("Search Document: Sparsetable Get:", err))
+			glog.Fatalln(newPostingError("Search Document: Sparsetable Get:", err))
 		}
 		stats.ops++
 		l.FillMap(results, uint32(i))
 	}
 	doc.ApplyHasher(p.hashKey, searchFunc)
-	p.logger.Println("Searched Document: ", stats.String())
+	glog.Infoln("Searched Document: ", stats.String())
 	return nil
 }
 
@@ -164,7 +162,7 @@ func (p *Posting) init(conf *registry.PostingConfig, c chan *document.Document) 
 	}
 	p.offset = conf.Offset
 	p.size = conf.Size
-	p.logger.Printf("Initialising Posting Server with %v Size: %d Offset: %d", p.hashKey.String(), p.size, p.offset)
+	glog.Infof("Initialising Posting Server with %v Size: %d Offset: %d", p.hashKey.String(), p.size, p.offset)
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt)
 load:
@@ -182,7 +180,7 @@ load:
 	if p.documents > 0 {
 		average = duration / float64(p.documents)
 	}
-	p.logger.Printf("Posting Server Initialised with %v documents in %.2f secs Average: %.2f secs/doc", p.documents, duration, average)
+	glog.Infof("Posting Server Initialised with %v documents in %.2f secs Average: %.2f secs/doc", p.documents, duration, average)
 	return nil
 }
 

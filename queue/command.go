@@ -7,7 +7,7 @@ import (
 	"github.com/donovanhide/superfastmatch/posting"
 	"github.com/donovanhide/superfastmatch/query"
 	"github.com/donovanhide/superfastmatch/registry"
-	"log"
+	"github.com/golang/glog"
 )
 
 type QueueItemRun struct {
@@ -50,7 +50,7 @@ func (items QueueItemSlice) Execute(registry *registry.Registry, client *posting
 		if run.err != nil {
 			run.item.Status = "Failed"
 			run.item.Error = run.err.Error()
-			log.Printf("Failed Queue Item: %v Error: %s", run.item, run.err)
+			glog.Errorf("Failed Queue Item: %v Error: %s", run.item, run.err)
 		} else {
 			run.item.Status = "Completed"
 			run.item.Payload = []byte(nil)

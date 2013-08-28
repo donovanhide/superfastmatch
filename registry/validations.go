@@ -3,7 +3,7 @@ package registry
 import (
 	"errors"
 	"fmt"
-	"log"
+	"github.com/golang/glog"
 	"regexp"
 	"strconv"
 	"strings"
@@ -17,7 +17,7 @@ type query string
 
 func checkErr(err error) {
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 }
 

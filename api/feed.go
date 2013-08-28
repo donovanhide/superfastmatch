@@ -7,8 +7,8 @@ import (
 	"github.com/donovanhide/superfastmatch/document"
 	"github.com/donovanhide/superfastmatch/queue"
 	"github.com/donovanhide/superfastmatch/registry"
+	"github.com/golang/glog"
 	"labix.org/v2/mgo"
-	"log"
 	"net/url"
 	"os"
 	"strings"
@@ -34,7 +34,7 @@ func monitor(reg *registry.Registry, feed *Feed) {
 		select {
 		case event := <-feed.stream.Events:
 			if err := json.Unmarshal([]byte(event.Data()), &fields); err != nil {
-				log.Println(err)
+				glog.Errorln(err)
 				continue
 			}
 			feed.DocId++
@@ -52,20 +52,20 @@ func monitor(reg *registry.Registry, feed *Feed) {
 			}
 			doc, err := document.NewDocument(id, &form)
 			if err != nil {
-				log.Println(err)
+				glog.Errorln(err)
 				continue
 			}
 			if _, err := queue.NewQueueItem(r, "Add Document", nil, id, "", "", strings.NewReader(form.Encode())); err != nil {
-				log.Println("Queueing add document:", err)
+				glog.Infoln("Queueing add document:", err)
 				continue
 			}
-			log.Printf("Received: %s %s", feed, doc.Title)
+			glog.Infof("Received: %s %s", feed, doc.Title)
 			feed.LastEventId = event.Id()
 			if _, err := db.C("feeds").UpsertId(feed.DocType, feed); err != nil {
-				log.Fatalln("Updating feeds:", err)
+				glog.Fatalln("Updating feeds:", err)
 			}
 		case err := <-feed.stream.Errors:
-			log.Println(err)
+			glog.Errorln(err)
 		}
 	}
 }
@@ -76,25 +76,25 @@ func MonitorFeeds(reg *registry.Registry) {
 	}
 	f, err := os.Open(reg.Feeds)
 	if err != nil {
-		log.Fatalln("Reading feeds:", err)
+		glog.Fatalln("Reading feeds:", err)
 	}
 	defer f.Close()
 	var feeds []Feed
 	if err := json.NewDecoder(f).Decode(&feeds); err != nil {
-		log.Fatalln("Decoding feeds:", err)
+		glog.Fatalln("Decoding feeds:", err)
 	}
 	db := reg.DB()
 	defer db.Session.Close()
 	for i := range feeds {
 		if err := db.C("feeds").FindId(feeds[i].DocType).One(&feeds[i]); err != nil && err != mgo.ErrNotFound {
-			log.Fatalln("Finding existing feeds:", err)
+			glog.Fatalln("Finding existing feeds:", err)
 		}
 		feeds[i].stream, err = eventsource.Subscribe(feeds[i].Url, feeds[i].LastEventId)
 		if err == nil {
-			log.Printf("Monitoring: %s", &feeds[i])
+			glog.Infof("Monitoring: %s", &feeds[i])
 			go monitor(reg, &feeds[i])
 		} else {
-			log.Fatalln("Eventsource:", err)
+			glog.Fatalln("Eventsource:", err)
 		}
 	}
 }

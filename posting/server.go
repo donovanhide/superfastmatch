@@ -2,13 +2,13 @@ package posting
 
 import (
 	"github.com/donovanhide/superfastmatch/registry"
-	"log"
+	"github.com/golang/glog"
 	"net"
 	"net/rpc"
 )
 
 func serve(registry *registry.Registry, l *net.Listener) {
-	log.Println("Starting Posting Server on:", (*l).Addr().String())
+	glog.Infoln("Starting Posting Server on:", (*l).Addr().String())
 	p := newPosting(registry, (*l).Addr().String())
 	server := rpc.NewServer()
 	server.Register(p)
@@ -20,7 +20,7 @@ func serve(registry *registry.Registry, l *net.Listener) {
 		}
 		go server.ServeConn(conn)
 	}
-	log.Println("Stopping Posting Server:", (*l).Addr().String())
+	glog.Infoln("Stopping Posting Server:", (*l).Addr().String())
 	registry.Routines.Done()
 }
 
