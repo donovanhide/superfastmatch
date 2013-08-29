@@ -111,11 +111,10 @@ func GetDocids(docTypeRange string, registry *registry.Registry) ([]document.Doc
 	db := registry.DB()
 	defer db.Session.Close()
 	query := DocTypeRange(docTypeRange).Parse()
-	pipe := []bson.M{{"$project": bson.M{"doctype": "$_id.doctype", "docid": "$_id.docid"}}, {"$match": query}}
-	iter := db.C("documents").Pipe(pipe).Iter()
-	var id document.DocumentID
-	for iter.Next(&id) {
-		ids = append(ids, id)
+	var doc document.Document
+	iter := db.C("documents").Find(query).Select(bson.M{"_id": 1}).Iter()
+	for iter.Next(&doc) {
+		ids = append(ids, doc.Id)
 	}
 	err := iter.Close()
 	return ids, err
