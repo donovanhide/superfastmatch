@@ -161,9 +161,9 @@ func Start(registry *registry.Registry) {
 			registry.Routines.Done()
 			return
 		case <-ticker.C:
-			start := time.Now()
 			var items QueueItemSlice
 			for {
+				start := time.Now()
 				if err := queue.Find(bson.M{"status": "Queued"}).Sort("_id").Limit(10).All(&items); err != nil {
 					panic(err)
 				}

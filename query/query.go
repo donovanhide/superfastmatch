@@ -107,11 +107,16 @@ func GetDocuments(values *url.Values, registry *registry.Registry) (*DocumentRes
 }
 
 func GetDocids(docTypeRange string, registry *registry.Registry) ([]document.DocumentID, error) {
-	docs := make([]document.DocumentID, 0)
+	ids := make([]document.DocumentID, 0)
 	db := registry.DB()
 	defer db.Session.Close()
 	query := DocTypeRange(docTypeRange).Parse()
 	pipe := []bson.M{{"$project": bson.M{"doctype": "$_id.doctype", "docid": "$_id.docid"}}, {"$match": query}}
-	err := db.C("documents").Pipe(pipe).All(&docs)
-	return docs, err
+	iter := db.C("documents").Pipe(pipe).Iter()
+	var id document.DocumentID
+	for iter.Next(&id) {
+		ids = append(ids, id)
+	}
+	err := iter.Close()
+	return ids, err
 }
