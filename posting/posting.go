@@ -114,10 +114,10 @@ func (p *Posting) alter(operation int, doc *document.Document) (err error) {
 	doc.ApplyHasher(p.hashKey, alterFunc)
 	switch operation {
 	case Add:
-		glog.Infoln("Added Document:", stats.String())
+		glog.V(2).Infoln("Added Document:", stats.String())
 		p.documents++
 	case Delete:
-		glog.Infoln("Deleted Document:", stats.String())
+		glog.V(2).Infoln("Deleted Document:", stats.String())
 		p.documents--
 	}
 	return nil
@@ -180,7 +180,7 @@ load:
 	if p.documents > 0 {
 		average = duration / float64(p.documents)
 	}
-	glog.Infof("Posting Server Initialised with %v documents in %.2f secs Average: %.2f secs/doc", p.documents, duration, average)
+	glog.Infof("Posting Server Initialised with %v documents in %.2f secs Average: %.4f secs/doc", p.documents, duration, average)
 	return nil
 }
 
