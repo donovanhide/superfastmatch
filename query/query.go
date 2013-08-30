@@ -93,7 +93,7 @@ func GetDocuments(values *url.Values, registry *registry.Registry) (*DocumentRes
 		q.Filter = q.Doctypes.Parse()
 	}
 	q.Select = bson.M{"text": 0}
-	q.DefaultSort = []string{"doctype", "docid"}
+	q.DefaultSort = []string{"_id.doctype", "_id.docid"}
 	db := registry.DB()
 	defer db.Session.Close()
 	docs := q.getQuery(values, db.C("documents"))
