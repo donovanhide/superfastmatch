@@ -97,6 +97,9 @@ func (r *Registry) Open() {
 	if r.session, err = mgo.Dial(r.flags.MongoUrl); err != nil {
 		glog.Fatalf("Error connecting to mongo instance: %s", err)
 	}
+	if err := r.session.DB("").C("documents").EnsureIndexKey("_id.doctype", "_id.docid"); err != nil {
+		glog.Fatalf("Error creating index: %s", err)
+	}
 	if err := r.session.DB("").C("queue").EnsureIndexKey("status"); err != nil {
 		glog.Fatalf("Error creating index: %s", err)
 	}
