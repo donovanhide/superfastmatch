@@ -100,7 +100,7 @@ func (r *Registry) Open() {
 	if err := r.session.DB("").C("documents").EnsureIndexKey("_id.doctype", "_id.docid"); err != nil {
 		glog.Fatalf("Error creating index: %s", err)
 	}
-	if err := r.session.DB("").C("queue").EnsureIndexKey("status"); err != nil {
+	if err := r.session.DB("").C("queue").EnsureIndexKey("status", "_id"); err != nil {
 		glog.Fatalf("Error creating index: %s", err)
 	}
 	if r.Mode == "posting" || r.Mode == "standalone" {
