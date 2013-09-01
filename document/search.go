@@ -139,8 +139,8 @@ func (s *SearchGroup) GetResult(registry *registry.Registry, d *DocumentArg, sav
 		return nil, err
 	}
 	results := s.Merge()
+	results.Fill(registry, doc)
 	if save {
-		results.Fill(registry, doc)
 		doc.Save(registry)
 	}
 	if d.Limit < len(results) {
