@@ -235,7 +235,7 @@ func (p *Posting) List(in Query, out *Query) error {
 	end := p.offset + p.size
 	l := NewPostingLine()
 	p.lock.RLock()
-	defer p.lock.Unlock()
+	defer p.lock.RUnlock()
 	for out.Start < end && out.Limit > 0 {
 		err := p.table.Get(out.Start-p.offset, l)
 		if err != nil {
