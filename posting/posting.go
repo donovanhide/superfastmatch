@@ -250,9 +250,9 @@ func (p *Posting) List(in Query, out *Query) error {
 			header := h.Value.(*Header)
 			doctypes[j] = Doctype{
 				Doctype: header.Doctype,
-				Docids:  header.Docids(),
-				Deltas:  header.Deltas(),
 			}
+			doctypes[j].Docids = append(doctypes[j].Docids, header.Docids()...)
+			doctypes[j].Deltas = append(doctypes[j].Deltas, header.Deltas()...)
 			j++
 		}
 		out.Result.Rows = append(out.Result.Rows, Row{
