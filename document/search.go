@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"sort"
 	"time"
+	"unicode/utf8"
 )
 
 type DocumentArg struct {
@@ -37,12 +38,15 @@ type Match struct {
 
 var decoder = schema.NewDecoder()
 
-func NewDocumentArg(values url.Values) *DocumentArg {
+func NewDocumentArg(registry *registry.Registry, values url.Values) (*DocumentArg, error) {
 	d := &DocumentArg{
 		Limit: 10,
 	}
 	decoder.Decode(d, values)
-	return d
+	if uint64(utf8.RuneCountInString(d.Text)) < registry.WindowSize {
+		return nil, fmt.Errorf("text field less than %d unicode characters", registry.WindowSize)
+	}
+	return d, nil
 }
 
 func (a *DocumentArg) GetDocument(registry *registry.Registry) (*Document, error) {

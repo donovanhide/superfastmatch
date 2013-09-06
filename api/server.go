@@ -162,7 +162,10 @@ func indexHandler(rw http.ResponseWriter, req *http.Request) *appError {
 
 func searchHandler(rw http.ResponseWriter, req *http.Request) *appError {
 	fillValues(req)
-	search := document.NewDocumentArg(req.Form)
+	search, err := document.NewDocumentArg(r, req.Form)
+	if err != nil {
+		return &appError{err, "Search Arguments", 500}
+	}
 	group, err := c.Search(search)
 	if err != nil {
 		return &appError{err, "Search Client", 500}
