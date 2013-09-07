@@ -11,6 +11,7 @@ import (
 	"labix.org/v2/mgo"
 	"net/url"
 	"os"
+	"os/signal"
 	"strings"
 )
 
@@ -29,10 +30,14 @@ func monitor(reg *registry.Registry, feed *Feed) {
 	db := reg.DB()
 	db.Session.SetSyncTimeout(0)
 	defer db.Session.Close()
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt)
 	for {
 		var fields map[string]interface{}
 		form := make(url.Values)
 		select {
+		case <-sig:
+			return
 		case event := <-feed.stream.Events:
 			if err := json.Unmarshal([]byte(event.Data()), &fields); err != nil {
 				glog.Errorln(err)
