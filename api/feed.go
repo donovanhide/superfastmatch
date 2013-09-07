@@ -27,6 +27,7 @@ func (f *Feed) String() string {
 
 func monitor(reg *registry.Registry, feed *Feed) {
 	db := reg.DB()
+	db.Session.SetSyncTimeout(0)
 	defer db.Session.Close()
 	for {
 		var fields map[string]interface{}
