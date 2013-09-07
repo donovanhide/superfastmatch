@@ -28,7 +28,6 @@ func (f *Feed) String() string {
 
 func monitor(reg *registry.Registry, feed *Feed) {
 	db := reg.DB()
-	db.Session.SetSyncTimeout(0)
 	defer db.Session.Close()
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt)
