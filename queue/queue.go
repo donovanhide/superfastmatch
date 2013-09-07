@@ -152,17 +152,16 @@ func Start(registry *registry.Registry) {
 	defer db.Session.Close()
 	queue := db.C("queue")
 	registry.Routines.Add(1)
-	ticker := time.NewTicker(time.Second)
+	var items QueueItemSlice
 	for {
-		select {
-		case <-registry.Queue:
-			glog.Infoln("Queue Processor Stopped")
-			ticker.Stop()
-			registry.Routines.Done()
-			return
-		case <-ticker.C:
-			var items QueueItemSlice
-			for {
+	loop:
+		for {
+			select {
+			case <-registry.Queue:
+				glog.Infoln("Queue Processor Stopped")
+				registry.Routines.Done()
+				return
+			default:
 				start := time.Now()
 				if err := queue.Find(bson.M{"status": "Queued"}).Sort("_id").Limit(10).All(&items); err != nil {
 					panic(err)
@@ -179,11 +178,12 @@ func Start(registry *registry.Registry) {
 				if len(items) > 0 {
 					glog.Infof("Executed %d Queue items in %.2f secs", len(items), time.Now().Sub(start).Seconds())
 				} else {
-					break
+					break loop
 				}
 			}
 		}
 	}
+	time.Sleep(time.Second)
 }
 
 func GetQueue(values url.Values, registry *registry.Registry) (*QueueResult, error) {
