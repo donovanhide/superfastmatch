@@ -104,17 +104,15 @@ func DeleteDocument(item *QueueItem, registry *registry.Registry, client *postin
 func AssociateDocument(item *QueueItem, registry *registry.Registry, client *posting.Client, c chan *QueueItemRun) {
 	var err error
 	var source []document.DocumentID
-	// if item.Source != nil {
-	// 	source = []document.DocumentID{*item.Source}
-	// }
-	// // if item.Target != nil {
-	// // 	target = []document.DocumentID{*item.Target}
-	// // }
+	if item.Source != nil {
+		source = []document.DocumentID{*item.Source}
+	}
 	if item.SourceRange != "" {
 		if source, err = query.GetDocids(item.SourceRange, registry); err != nil {
 			c <- runFailure(item, "Get Source Range", err)
 		}
 	}
+	fmt.Println(source, item.Target, item.TargetRange)
 	for _, s := range source {
 		doc := &document.DocumentArg{Id: &s, TargetRange: item.TargetRange}
 		result, err := client.Search(doc)

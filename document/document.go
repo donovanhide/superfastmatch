@@ -31,13 +31,13 @@ type DocumentID struct {
 }
 
 type Document struct {
-	Id             DocumentID    `json:"id" bson:"_id"`
-	Title          string        `json:"title"`
-	Text           string        `json:"text,omitempty"`
-	Length         uint64        `json:"characters"`
-	Valid          bool          `json:"valid"`
-	Meta           MetaMap       `json:"metaData,omitempty"`
-	Associations   *Associations `json:"associations,omitempty"`
+	Id             DocumentID       `json:"id" bson:"_id"`
+	Title          string           `json:"title"`
+	Text           string           `json:"text,omitempty"`
+	Length         uint64           `json:"characters"`
+	Valid          bool             `json:"valid"`
+	Meta           MetaMap          `json:"metaData"`
+	Associations   AssociationSlice `json:"associations,omitempty"`
 	hashes         map[HashKey][]uint64
 	blooms         map[BloomKey]Bloom
 	normalisedText *utf8string.String
@@ -154,15 +154,13 @@ func (document *Document) Delete(registry *registry.Registry) error {
 }
 
 func (d *Document) AddAssociation(registry *registry.Registry, other *Document, saveThemes bool) *Association {
-	if d.Associations == nil {
-		d.Associations = &Associations{}
-	}
 	association, themes := BuildAssociation(registry.WindowSize, d, other)
 	if len(association.Fragments) > 0 {
-		d.Associations.Documents = append(d.Associations.Documents, *association)
-	}
-	if saveThemes {
-		themes.Save(registry)
+		association.Text = ""
+		d.Associations = append(d.Associations, *association)
+		if saveThemes {
+			themes.Save(registry)
+		}
 	}
 	return association
 }

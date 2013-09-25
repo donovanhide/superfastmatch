@@ -186,7 +186,7 @@ func GetQueue(values url.Values, registry *registry.Registry) (*QueueResult, err
 	var items []QueueItem
 	db := registry.DB()
 	defer db.Session.Close()
-	if err := db.C("queue").Find(nil).Select(bson.M{"payload": 0}).All(&items); err != nil {
+	if err := db.C("queue").Find(nil).Select(bson.M{"payload": 0}).Sort("_id").All(&items); err != nil {
 		return nil, fmt.Errorf("Queue item not found: %s", err)
 	}
 	return &QueueResult{

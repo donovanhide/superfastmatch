@@ -124,7 +124,6 @@ func BuildAssociation(windowSize uint64, left *Document, right *Document) (*Asso
 	}
 	pairs := Common(left, right, hashKey)
 	fragments, themes = pairs.BuildFragments(left, int(hashKey.WindowSize), int(windowSize))
-	right.Text = ""
 	right.Associations = nil
 	return &Association{
 		Document:      *right,

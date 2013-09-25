@@ -21,7 +21,7 @@ type DocumentArg struct {
 type SearchResult struct {
 	Success      bool             `json:"success"`
 	TotalRows    int              `json:"totalRows"`
-	Associations AssociationSlice `json:"documents,omitempty"`
+	Associations AssociationSlice `json:"associations,omitempty"`
 }
 
 type Tally struct {
@@ -150,12 +150,9 @@ func (s *SearchGroup) GetResult(registry *registry.Registry, d *DocumentArg, sav
 	if d.Limit < len(results) {
 		results = results[:d.Limit]
 	}
-	if doc.Associations == nil {
-		return &SearchResult{}, nil
-	}
 	return &SearchResult{
 		Success:      true,
-		TotalRows:    len(doc.Associations.Documents),
-		Associations: doc.Associations.Documents,
+		TotalRows:    len(doc.Associations),
+		Associations: doc.Associations,
 	}, nil
 }
