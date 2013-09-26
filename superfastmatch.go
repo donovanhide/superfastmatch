@@ -20,7 +20,7 @@ func main() {
 		return
 	}
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	registry := registry.NewRegistry(os.Args)
+	registry := registry.NewRegistry()
 	registry.Open()
 	defer registry.Close()
 	glog.Infof("Started in %v mode with Hash Width: %v and Window Size: %v", registry.Mode, registry.HashWidth, registry.WindowSize)

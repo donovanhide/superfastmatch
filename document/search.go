@@ -142,8 +142,7 @@ func (s *SearchGroup) GetResult(registry *registry.Registry, d *DocumentArg, sav
 	if err != nil {
 		return nil, err
 	}
-	results := s.Merge()
-	results.Fill(registry, doc)
+	results := s.Merge().Fill(registry, doc)
 	if save {
 		doc.Save(registry)
 	}

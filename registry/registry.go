@@ -6,6 +6,7 @@ import (
 	"github.com/golang/glog"
 	"labix.org/v2/mgo"
 	"net"
+	"os"
 	"sync"
 )
 
@@ -46,14 +47,14 @@ type Registry struct {
 	flags            *flags
 }
 
-func parseFlags(args []string) *flags {
-	f := flags{
-		WindowSize:       30,
-		HashWidth:        24,
-		GroupSize:        24,
-		PostingAddresses: []string{"127.0.0.1:8090", "127.0.0.1:8091"},
-	}
-	// flags := flag.NewFlagSet("flags", flag.ContinueOnError)
+var f = flags{
+	WindowSize:       30,
+	HashWidth:        24,
+	GroupSize:        24,
+	PostingAddresses: []string{"127.0.0.1:8090", "127.0.0.1:8091"},
+}
+
+func init() {
 	flag.Usage = func() {
 		fmt.Println("Follow superfastmatch with either a mode or \"client\" to alter behaviour")
 		fmt.Println("Modes: api queue posting")
@@ -67,25 +68,23 @@ func parseFlags(args []string) *flags {
 	flag.StringVar(&f.MongoUrl, "mongo_url", "127.0.0.1:27017/superfastmatch", "Url to connect to MongoDB with.")
 	flag.Var(&f.PostingAddresses, "posting_addresses", "Comma-separated list of addresses for Posting Servers.")
 	flag.StringVar(&f.Feeds, "feeds", "", "Path to JSON file containing feed configuration.")
-	flag.Parse()
-	return &f
 }
 
-func parseMode(args []string) (string, []string) {
-	if len(args) == 1 {
-		return "standalone", []string{}
+func parseMode() string {
+	if len(os.Args) == 1 {
+		return "standalone"
 	}
-	switch args[1] {
+	switch os.Args[1] {
 	case "api":
-		return "api", args[2:]
+		return "api"
 	case "posting":
-		return "posting", args[2:]
+		return "posting"
 	case "queue":
-		return "queue", args[2:]
+		return "queue"
 	case "add", "delete", "associate", "switch", "search":
-		return "client", args[1:]
+		return "client"
 	}
-	return "standalone", args[1:]
+	return "standalone"
 }
 
 func (r *Registry) Open() {
@@ -147,10 +146,11 @@ func (r *Registry) Close() {
 	r.session.Close()
 }
 
-func NewRegistry(args []string) *Registry {
+func NewRegistry() *Registry {
+	flag.Parse()
 	r := new(Registry)
-	r.Mode, args = parseMode(args)
-	r.flags = parseFlags(args)
+	r.Mode = parseMode()
+	r.flags = &f
 	return r
 }
 
