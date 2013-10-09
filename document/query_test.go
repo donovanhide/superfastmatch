@@ -1,7 +1,6 @@
-package query
+package document
 
 import (
-	"github.com/donovanhide/superfastmatch/document"
 	"github.com/donovanhide/superfastmatch/testutils"
 	. "launchpad.net/gocheck"
 	"net/http"
@@ -18,23 +17,24 @@ type QuerySuite struct {
 var _ = Suite(&QuerySuite{})
 
 var doctypeRangeTests = []struct {
-	doctypes DocTypeRange
-	valid    bool
+	doctypes  DocTypeRange
+	valid     bool
+	intervals IntervalSlice
 }{
-	{"", true},
-	{"1", true},
-	{"1:3", true},
-	{"1-2:3", true},
-	{"1-2:3-2", true},
-	{"1-2:3-2", true},
-	{"-", false},
-	{":", false},
-	{"1-", false},
-	{"-1", false},
-	{"1-2:", false},
-	{":1-2", false},
-	{"asas1-2asas", false},
-	{"1:2asas", false},
+	{"", true, IntervalSlice{}},
+	{"1", true, IntervalSlice{{1, 1}}},
+	{"1:3", true, IntervalSlice{{1, 1}, {3, 3}}},
+	{"1-2:3", true, IntervalSlice{{1, 2}, {3, 3}}},
+	{"1-2:3-2", true, IntervalSlice{{1, 2}, {2, 3}}},
+	{"1-2:2-2", true, IntervalSlice{{1, 2}, {2, 2}}},
+	{"-", false, IntervalSlice{}},
+	{":", false, IntervalSlice{}},
+	{"1-", false, IntervalSlice{}},
+	{"-1", false, IntervalSlice{}},
+	{"1-2:", false, IntervalSlice{}},
+	{":1-2", false, IntervalSlice{}},
+	{"asas1-2asas", false, IntervalSlice{}},
+	{"1:2asas", false, IntervalSlice{}},
 }
 
 func buildValues(method string, url string, doctypes string) *url.Values {
@@ -44,12 +44,24 @@ func buildValues(method string, url string, doctypes string) *url.Values {
 	return &req.Form
 }
 
-func TestDocTypeRange(t *testing.T) {
+func (s *QuerySuite) TestDocTypeRange(c *C) {
 	for _, tt := range doctypeRangeTests {
-		if tt.doctypes.Valid() != tt.valid {
-			t.Errorf("Validity of \"%s\"!=%v", tt.doctypes, tt.valid)
-		}
+		c.Check(tt.doctypes.Valid(), Equals, tt.valid)
+		c.Check(tt.doctypes.Intervals(), DeepEquals, tt.intervals)
 	}
+}
+
+func (s *QuerySuite) TestIntervals(c *C) {
+	intervals := DocTypeRange("1-3:7-6:9").Intervals()
+	c.Check(intervals.Contains(1), Equals, true)
+	c.Check(intervals.Contains(2), Equals, true)
+	c.Check(intervals.Contains(3), Equals, true)
+	c.Check(intervals.Contains(4), Equals, false)
+	c.Check(intervals.Contains(5), Equals, false)
+	c.Check(intervals.Contains(6), Equals, true)
+	c.Check(intervals.Contains(7), Equals, true)
+	c.Check(intervals.Contains(8), Equals, false)
+	c.Check(intervals.Contains(9), Equals, true)
 }
 
 func (s *QuerySuite) TestFillDocumentQuery(c *C) {
@@ -66,7 +78,7 @@ func (s *QuerySuite) TestFillDocumentQuery(c *C) {
 }
 
 func (s *QuerySuite) TestGetDocuments(c *C) {
-	docs := document.BuildTestCorpus(10, 20, 500)
+	docs := BuildTestCorpus(10, 20, 500)
 	for doc := <-docs; doc != nil; doc = <-docs {
 		c.Assert(doc.Save(s.Registry), IsNil)
 	}
@@ -89,7 +101,7 @@ func (s *QuerySuite) TestGetDocuments(c *C) {
 }
 
 func (s *QuerySuite) TestGetDocids(c *C) {
-	docs := document.BuildTestCorpus(10, 20, 500)
+	docs := BuildTestCorpus(10, 20, 500)
 	for doc := <-docs; doc != nil; doc = <-docs {
 		c.Assert(doc.Save(s.Registry), IsNil)
 	}

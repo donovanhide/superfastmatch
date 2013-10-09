@@ -2,6 +2,7 @@ package posting
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/donovanhide/superfastmatch/document"
 	. "launchpad.net/gocheck"
 	"math/rand"
@@ -10,14 +11,16 @@ import (
 func CheckLine(c *C, line *PostingLine, buf []byte, doctype uint32, docid uint32, length int) []byte {
 	line.Write(buf)
 	line.AddDocumentId(&document.DocumentID{Doctype: doctype, Docid: docid})
-	if line.Length != length {
-		c.Log("Fail:", doctype, docid, length, line.Length, line.count, buf)
-		c.Fail()
-	} else {
-		c.Log("Pass:", doctype, docid, length, line.Length, line.count, buf)
-	}
 	newBuf := make([]byte, line.Length)
 	line.Read(newBuf)
+	desc := fmt.Sprintf("Doctype: %d Docid: %d Expected Length: %d Actual Length: %d Count: %d Buffer: %v", doctype, docid, length, line.Length, line.count, newBuf)
+	if line.Length != length {
+		c.Log("Fail: ", desc)
+		c.Fail()
+	} else {
+		c.Log("Pass: ", desc)
+	}
+	c.Log(line.String(true))
 	return newBuf
 }
 
@@ -40,7 +43,7 @@ func (s *PostingSuite) TestLineLength(c *C) {
 	buf = CheckLine(c, line, buf, 3, 0, 25)
 }
 
-func (s *PostingSuite) TestLineLengthSpecficExample(c *C) {
+func (s *PostingSuite) TestLineLengthSpecificExample(c *C) {
 	line := NewPostingLine()
 	buf := make([]byte, 0)
 	c.Check(line.Length, Equals, 1)
@@ -53,32 +56,44 @@ func (s *PostingSuite) TestLineLengthSpecficExample(c *C) {
 	buf = CheckLine(c, line, buf, 94, 266, 22)
 }
 
-func (s *PostingSuite) TestInsertRemoveDocid(c *C) {
-	h := newHeader()
-	maxLine := 255
-	docids := make(UInt32Set)
-	for i := 0; i <= 10000; i++ {
-		docid := rand.Uint32()%1000 + 1
-		_, changed := h.insertDocid(docid)
-		if changed {
-			h.existing, h.updated = h.updated, h.existing
-		}
-		c.Assert(changed, Equals, docids.Add(docid))
-		c.Check(h.Docids(), DeepEquals, SortedKeys(docids))
-		if len(h.existing) >= maxLine {
-			break
-		}
-	}
-	for i := 0; i <= 10000; i++ {
-		docid := rand.Uint32()%1000 + 1
-		_, _, changed := h.removeDocid(docid)
-		if changed {
-			h.existing, h.updated = h.updated, h.existing
-		}
-		c.Assert(changed, Equals, docids.Remove(docid))
-		c.Check(h.Docids(), DeepEquals, SortedKeys(docids))
-	}
+func (s *PostingSuite) TestLineLengthSpecificExample2(c *C) {
+	line := NewPostingLine()
+	buf := make([]byte, 0)
+	c.Check(line.Length, Equals, 1)
+	buf = CheckLine(c, line, buf, 5, 10, 4)
+	buf = CheckLine(c, line, buf, 1, 1, 7)
+	buf = CheckLine(c, line, buf, 1, 2, 8)
+	buf = CheckLine(c, line, buf, 1, 3, 9)
 }
+
+// TODO: Rewrite test to use a PostingLine...
+
+// func (s *PostingSuite) TestInsertRemoveDocid(c *C) {
+// 	h := newHeader()
+// 	maxLine := 255
+// 	docids := make(UInt32Set)
+// 	for i := 0; i <= 10000; i++ {
+// 		docid := rand.Uint32()%1000 + 1
+// 		_, changed := h.insertDocid(docid)
+// 		if changed {
+// 			h.existing, h.updated = h.updated, h.existing
+// 		}
+// 		c.Assert(changed, Equals, docids.Add(docid))
+// 		c.Check(h.Docids(), DeepEquals, SortedKeys(docids))
+// 		if len(h.existing) >= maxLine {
+// 			break
+// 		}
+// 	}
+// 	for i := 0; i <= 10000; i++ {
+// 		docid := rand.Uint32()%1000 + 1
+// 		_, _, changed := h.removeDocid(docid)
+// 		if changed {
+// 			h.existing, h.updated = h.updated, h.existing
+// 		}
+// 		c.Assert(changed, Equals, docids.Remove(docid))
+// 		c.Check(h.Docids(), DeepEquals, SortedKeys(docids))
+// 	}
+// }
 
 func (s *PostingSuite) BenchmarkPostingLine(c *C) {
 	b := make([]byte, 0)

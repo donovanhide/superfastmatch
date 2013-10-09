@@ -57,10 +57,19 @@ func (s *PostingSuite) TestAddDocumentWithoutClient(c *C) {
 	for _, id := range ids {
 		err := p.Add(&document.DocumentArg{Id: id}, nil)
 		c.Assert(err, IsNil)
+		result := make(document.SearchMap)
+		err = p.Search(&document.DocumentArg{Id: id}, &result)
+		c.Assert(err, IsNil)
+		c.Assert(result[*id], NotNil)
 	}
 	for _, id := range ids {
 		err := p.Delete(&document.DocumentArg{Id: id}, nil)
 		c.Assert(err, IsNil)
+		result := make(document.SearchMap)
+		err = p.Search(&document.DocumentArg{Id: id}, &result)
+		c.Log(result)
+		c.Assert(err, IsNil)
+		c.Assert(result[*id], IsNil)
 	}
 }
 

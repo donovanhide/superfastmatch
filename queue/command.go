@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/donovanhide/superfastmatch/document"
 	"github.com/donovanhide/superfastmatch/posting"
-	"github.com/donovanhide/superfastmatch/query"
 	"github.com/donovanhide/superfastmatch/registry"
 	"github.com/golang/glog"
 )
@@ -108,7 +107,7 @@ func AssociateDocument(item *QueueItem, registry *registry.Registry, client *pos
 		source = []document.DocumentID{*item.Source}
 	}
 	if item.SourceRange != "" {
-		if source, err = query.GetDocids(item.SourceRange, registry); err != nil {
+		if source, err = document.GetDocids(item.SourceRange, registry); err != nil {
 			c <- runFailure(item, "Get Source Range", err)
 		}
 	}

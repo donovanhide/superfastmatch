@@ -102,7 +102,6 @@ func (s *SparseTable) Set(pos uint64, r io.Reader, length int) error {
 		break
 	}
 	s.lengths[pos] = uint8(length)
-
 	n, err := r.Read((*g)[start : int(start)+length])
 	if n != length {
 		return &Error{pos: pos, ShortRead: true}

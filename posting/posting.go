@@ -1,13 +1,14 @@
 package posting
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"github.com/donovanhide/superfastmatch/document"
-	"github.com/donovanhide/superfastmatch/query"
 	"github.com/donovanhide/superfastmatch/registry"
 	"github.com/donovanhide/superfastmatch/sparsetable"
 	"github.com/golang/glog"
+	"io"
 	"os"
 	"os/signal"
 	"sync"
@@ -37,6 +38,7 @@ func newPosting(registry *registry.Registry, prefix string) *Posting {
 const (
 	Add = iota
 	Delete
+	NoOp
 )
 
 type Stats struct {
@@ -83,21 +85,28 @@ func (p *Posting) alter(operation int, doc *document.Document) (err error) {
 		}
 		stats.count++
 		if err := p.table.Get(pos, l); err != nil {
-			glog.Fatalln(newPostingError("Add Document: Sparsetable Get:", err))
+			glog.Fatalln(newPostingError("Alter Document: Sparsetable Get:", err))
 		}
+		var err error
 		switch operation {
 		case Add:
 			if !l.AddDocumentId(&doc.Id) {
 				stats.dupes++
 				return
 			}
+			err = p.table.Set(pos, l, l.Length)
 		case Delete:
 			if !l.RemoveDocumentId(&doc.Id) {
 				stats.dupes++
 				return
 			}
+			buf := make([]byte, l.Length)
+			if _, err := l.Read(buf); err != nil && err != io.EOF {
+				glog.Fatalln(newPostingError("Alter Document: Buffered Delete:", err))
+			}
+			err = p.table.Set(pos, bytes.NewReader(buf), l.Length)
 		}
-		if err := p.table.Set(pos, l, l.Length); err != nil {
+		if err != nil {
 			if serr, ok := err.(*sparsetable.Error); ok {
 				switch {
 				case serr.Full:
@@ -185,11 +194,11 @@ load:
 }
 
 func (p *Posting) Init(conf *registry.PostingConfig, reply *bool) error {
-	docids, err := query.GetDocids(conf.InitialQuery, p.registry)
+	docids, err := document.GetDocids(conf.InitialQuery, p.registry)
 	if err != nil {
 		return newPostingError("Get Document:", err)
 	}
-	c := document.GetDocuments(docids, p.registry)
+	c := document.GetDocumentsById(docids, p.registry)
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	return p.init(conf, c)
@@ -237,8 +246,7 @@ func (p *Posting) List(in Query, out *Query) error {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 	for out.Start < end && out.Limit > 0 {
-		err := p.table.Get(out.Start-p.offset, l)
-		if err != nil {
+		if err := p.table.Get(out.Start-p.offset, l); err != nil {
 			return err
 		}
 		out.Start++

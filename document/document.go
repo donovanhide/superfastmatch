@@ -127,7 +127,7 @@ func GetDocument(id *DocumentID, registry *registry.Registry) (*Document, error)
 	return doc.init(), nil
 }
 
-func GetDocuments(ids []DocumentID, registry *registry.Registry) chan *Document {
+func GetDocumentsById(ids []DocumentID, registry *registry.Registry) chan *Document {
 	c := make(chan *Document, 5)
 	go func() {
 		for _, id := range ids {

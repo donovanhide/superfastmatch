@@ -73,20 +73,20 @@ func (h *Header) write(b []byte) int {
 	h.Doctype, pos = readUvarint32(b, pos)
 	length, pos := readUvarint32(b, pos)
 	h.existing = b[pos : pos+int(length)]
-	h.updated = h.updated[:0] //Needed?
+	h.updated = h.updated[:0]
 	return pos + int(length)
 }
 
 func (h *Header) read(b []byte) int {
-	pos := 0
 	deltas := h.existing
-	if len(h.updated) > 0 { //Get rid!!
+	if len(h.updated) > 0 {
 		deltas = h.updated
 	}
-	pos = putUvarint32(b, pos, h.Doctype)
+	prelude := sizeUVarint32(h.Doctype) + sizeUVarint32(uint32(len(deltas)))
+	copy(b[prelude:prelude+len(deltas)], deltas)
+	pos := putUvarint32(b, 0, h.Doctype)
 	pos = putUvarint32(b, pos, uint32(len(deltas)))
-	pos += copy(b[pos:pos+len(deltas)], deltas)
-	return pos
+	return pos + len(deltas)
 }
 
 func newHeader() *Header {
@@ -102,9 +102,13 @@ func (h *Header) String() string {
 }
 
 func (h *Header) Docids() []uint32 {
+	deltas := h.existing
+	if len(h.updated) > 0 { //Get rid!!
+		deltas = h.updated
+	}
 	current, delta, i := uint32(0), uint32(0), 0
-	for pos, length := 0, len(h.existing); pos < length; i++ {
-		delta, pos = readUvarint32(h.existing, pos)
+	for pos, length := 0, len(deltas); pos < length; i++ {
+		delta, pos = readUvarint32(deltas, pos)
 		current += delta
 		h.buf[i] = current
 	}
@@ -112,9 +116,13 @@ func (h *Header) Docids() []uint32 {
 }
 
 func (h *Header) Deltas() []uint32 {
+	deltas := h.existing
+	if len(h.updated) > 0 { //Get rid!!
+		deltas = h.updated
+	}
 	i := 0
-	for pos, length := 0, len(h.existing); pos < length; i++ {
-		h.buf[i], pos = readUvarint32(h.existing, pos)
+	for pos, length := 0, len(deltas); pos < length; i++ {
+		h.buf[i], pos = readUvarint32(deltas, pos)
 	}
 	return h.buf[:i]
 }
@@ -302,14 +310,13 @@ func (p *PostingLine) FillMap(m *document.SearchMap, pos uint32) {
 		for _, docid := range header.Docids() {
 			id := document.DocumentID{Doctype: doctype, Docid: docid}
 			if tally, ok := (*m)[id]; ok {
-				// MAGIC NUMBER ALERT!!!!!
-				if pos-tally.Last < 128 {
-					tally.SumDeltas += uint64(pos - tally.Last)
-					tally.Last = pos
-					tally.Count++
-				}
+				delta := uint64(pos - tally.Last)
+				tally.SumDeltas += delta
+				tally.SumSquareDeltas += delta * delta
+				tally.Last = pos
+				tally.Count++
 			} else {
-				(*m)[id] = &document.Tally{SumDeltas: 0, Last: pos, Count: 1}
+				(*m)[id] = &document.Tally{SumDeltas: 0, SumSquareDeltas: 0, Last: pos, Count: 1}
 			}
 		}
 	}
@@ -321,8 +328,9 @@ func (p *PostingLine) String(debug bool) string {
 	for h := p.headers.Front(); i < p.count; h = h.Next() {
 		i++
 		header := h.Value.(*Header)
-		docids := header.Docids()
-		buf.WriteString(fmt.Sprintf("Doctype: %v Length: %v Deltas: %v Docids:%v", header.Doctype, len(docids), header.Deltas(), docids))
+		deltas := header.Deltas()
+		buf.WriteString(fmt.Sprintf("Doctype: %v Length: %v Deltas: %v", header.Doctype, len(deltas), deltas))
+		buf.WriteString(fmt.Sprintf("Docids:%v", header.Docids()))
 		if debug {
 			buf.WriteString(header.String())
 		}

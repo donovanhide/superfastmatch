@@ -5,7 +5,6 @@ import (
 	"github.com/donovanhide/mux"
 	"github.com/donovanhide/superfastmatch/document"
 	"github.com/donovanhide/superfastmatch/posting"
-	"github.com/donovanhide/superfastmatch/query"
 	"github.com/donovanhide/superfastmatch/queue"
 	"github.com/donovanhide/superfastmatch/registry"
 	"github.com/golang/glog"
@@ -33,7 +32,6 @@ var routes = []struct {
 	{"/document/test/", nil, testHandler, ss{"POST"}},
 	{"/document/{doctypes:%s}/", is{rangeRegex}, documentsHandler, ss{"GET", "DELETE"}},
 	{"/document/{doctype:%s}/{docid:%s}/", is{docRegex, docRegex}, documentHandler, ss{"GET", "POST", "DELETE"}},
-	{"/document/{doctype:%s}/{docid:%s}/{target:%s}/", is{docRegex, docRegex, rangeRegex}, documentHandler, ss{"POST"}},
 	{"/association/", nil, associationHandler, ss{"GET", "POST", "DELETE"}},
 	{"/association/{source:%s}/", is{rangeRegex}, associationHandler, ss{"GET", "POST", "DELETE"}},
 	{"/association/{source:%s}/{target:%s}/", is{rangeRegex, rangeRegex}, associationHandler, ss{"GET", "POST", "DELETE"}},
@@ -42,6 +40,7 @@ var routes = []struct {
 	{"/queue/{id:%s}/", is{queueRegex}, queueItemHandler, ss{"GET"}},
 	{"/index/", nil, indexHandler, ss{"GET"}},
 	{"/search/", nil, searchHandler, ss{"POST"}},
+	{"/search/{target:%s}/", is{rangeRegex}, searchHandler, ss{"POST"}},
 }
 
 type QueuedResponse struct {
@@ -61,7 +60,7 @@ func documentsHandler(rw http.ResponseWriter, req *http.Request) *appError {
 	fillValues(req)
 	switch req.Method {
 	case "GET":
-		documents, err := query.GetDocuments(&req.Form, r)
+		documents, err := document.GetDocuments(&req.Form, r)
 		if err != nil {
 			return &appError{err, "Document not found", 404}
 		}
@@ -84,7 +83,6 @@ func documentHandler(rw http.ResponseWriter, req *http.Request) *appError {
 		return writeJson(rw, req, document, 200)
 	case "POST":
 		target, err := document.NewDocumentId(req)
-		targetRange := mux.Vars(req)["target"]
 		if err != nil {
 			return &appError{err, "Add document error", 500}
 		}
@@ -92,15 +90,7 @@ func documentHandler(rw http.ResponseWriter, req *http.Request) *appError {
 		if err != nil {
 			return &appError{err, "Add document error", 500}
 		}
-		fmt.Println("targetRange", targetRange)
-		if targetRange == "" {
-			return writeJson(rw, req, &QueuedResponse{Success: true, QueueItem: item}, 202)
-		}
-		item2, err := queue.NewQueueItem(r, "Associate Document", target, nil, "", targetRange, req.Body)
-		if err != nil {
-			return &appError{err, "Associate document error", 500}
-		}
-		return writeJson(rw, req, &QueuedResponse{Success: true, QueueItem: item2}, 202)
+		return writeJson(rw, req, &QueuedResponse{Success: true, QueueItem: item}, 202)
 	case "DELETE":
 		target, err := document.NewDocumentId(req)
 		if err != nil {
