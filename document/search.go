@@ -69,7 +69,7 @@ func (t *Tally) Score() float64 {
 }
 
 func (m *Match) String() string {
-	return fmt.Sprintf("Id: %s Mean: %.2f StdDev: %.2f Sum of Deltas: %d  Sum Of Squared Deltas: %d Count: %d Score: %.2f\n", m.Id.String(), m.Mean(), m.StdDev(), m.SumDeltas, m.SumSquareDeltas, m.Count, m.Score())
+	return fmt.Sprintf("Id: %s Mean: %.2f StdDev: %.2f Sum of Deltas: %d  Sum Of Squared Deltas: %d Count: %d Score: %.6f\n", m.Id.String(), m.Mean(), m.StdDev(), m.SumDeltas, m.SumSquareDeltas, m.Count, m.Score())
 }
 
 type MatchSlice []Match
@@ -118,6 +118,9 @@ func (s *SearchGroup) Merge(doc *DocumentArg) MatchSlice {
 		i++
 	}
 	sort.Sort(matches)
+	if doc.Limit < len(matches) {
+		matches = matches[:doc.Limit]
+	}
 	return matches
 }
 
@@ -152,7 +155,7 @@ func (s *SearchGroup) GetResult(registry *registry.Registry, d *DocumentArg, sav
 		return nil, err
 	}
 	results := s.Merge(d).Fill(registry, doc)
-	fmt.Println(results.String())
+	glog.V(2).Infoln(results.String())
 	if save {
 		doc.Save(registry)
 	}
