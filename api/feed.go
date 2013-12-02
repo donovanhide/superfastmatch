@@ -38,6 +38,9 @@ func monitor(reg *registry.Registry, feed *Feed) {
 		case <-sig:
 			return
 		case event := <-feed.stream.Events:
+			if len(event.Data()) == 0 {
+				continue
+			}
 			if err := json.Unmarshal([]byte(event.Data()), &fields); err != nil {
 				glog.Errorln(feed.String(), err)
 				continue
